@@ -23,7 +23,7 @@
     @endif
 
     {{-- Alerta Geral de Erro de Submissão (Se não houver dados 'old' do modal - erro de seleção inicial) --}}
-    @if ($errors->any() && !old('date'))
+    @if ($errors->any() && !old('data_reserva'))
         <div class="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 rounded-lg relative mb-8 shadow-md" role="alert">
             <p class="font-bold flex items-center"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg> Erro na Submissão!</p>
             <p>Por favor, selecione um horário e complete os dados no modal corretamente.</p>
@@ -94,6 +94,8 @@
                                 data-start="{{ $slot['start_time'] }}"
                                 data-end="{{ $slot['end_time'] }}"
                                 data-price="{{ $slot['price'] }}"
+                                {{-- CRÍTICO: Adiciona o schedule_id ao botão --}}
+                                data-schedule-id="{{ $slot['schedule_id'] }}"
                             >
                                 {{-- Horário --}}
                                 <span class="text-xl font-extrabold text-indigo-700 dark:text-indigo-300 group-hover:text-white transition duration-300 mb-1 sm:mb-0">
@@ -119,11 +121,11 @@
     {{-- --- Modal de Confirmação de Dados --- --}}
     <div id="booking-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
         <div id="modal-content" class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-8
-            {{-- Borda Dinâmica: vermelha se houver erro de validação (com data selecionada), azul se estiver abrindo normal --}}
-            @if ($errors->any() && old('date')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif">
+            {{-- CRÍTICO: Usando 'data_reserva' para checar o old() --}}
+            @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif">
 
             {{-- NOVO: Alerta de Erro Interno (se reabrir por falha de validação) --}}
-            @if ($errors->any() && old('date'))
+            @if ($errors->any() && old('data_reserva'))
                 <div class="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-lg relative shadow-md" role="alert">
                     <p class="font-bold flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
@@ -164,28 +166,33 @@
             <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
                 @csrf
 
-                {{-- Campos Hidden... --}}
-                <input type="hidden" name="date" id="form-date" value="{{ old('date') }}">
-                <input type="hidden" name="start_time" id="form-start" value="{{ old('start_time') }}">
-                <input type="hidden" name="end_time" id="form-end" value="{{ old('end_time') }}">
+                {{-- Campos Hidden: RENOMEADOS para corresponder ao StoreReservaRequest e adicionado schedule_id --}}
+                <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
+                <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
+                <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
                 <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
+                <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}"> {{-- CRÍTICO: NOVO CAMPO --}}
 
                 <div class="mb-5">
                     <label for="client_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Seu Nome Completo</label>
-                    <input type="text" name="client_name" id="client_name" required
-                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-lg shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('client_name') border-red-500 ring-1 ring-red-500 @enderror"
-                        value="{{ old('client_name') }}">
-                    @error('client_name')
+                    {{-- Campo Nome: RENOMEADO para 'nome_cliente' --}}
+                    <input type="text" name="nome_cliente" id="client_name" required
+                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-lg shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('nome_cliente') border-red-500 ring-1 ring-red-500 @enderror"
+                        value="{{ old('nome_cliente') }}">
+                    {{-- Tag @error: CORRIGIDA para 'nome_cliente' --}}
+                    @error('nome_cliente')
                         <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
                     @enderror
                 </div>
 
                 <div class="mb-8">
                     <label for="client_contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Seu WhatsApp (apenas números)</label>
-                    <input type="tel" name="client_contact" id="client_contact" required
-                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-lg shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('client_contact') border-red-500 ring-1 ring-red-500 @enderror"
-                        value="{{ old('client_contact') }}">
-                    @error('client_contact')
+                    {{-- Campo Contato: RENOMEADO para 'contato_cliente' --}}
+                    <input type="tel" name="contato_cliente" id="client_contact" required
+                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-lg shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror"
+                        value="{{ old('contato_cliente') }}">
+                    {{-- Tag @error: CORRIGIDA para 'contato_cliente' --}}
+                    @error('contato_cliente')
                         <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
                     @else
                         {{-- Placeholder para Mensagem de Validação do Cliente (Só aparece se não houver erro de backend) --}}
@@ -212,8 +219,7 @@
 </div>
 
 
-{{-- Scripts... (ajustados para a sintaxe correta e com validação) --}}
-
+{{-- Scripts para funcionalidade do modal e máscara (CORRIGIDOS) --}}
 <script>
 /**
  * Aplica máscara de telefone brasileiro (DDD + 8 ou 9 dígitos) no formato (XX) XXXXX-XXXX.
@@ -256,6 +262,20 @@ function validateContact(value) {
     return digits.length === 10 || digits.length === 11;
 }
 
+/**
+ * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
+ */
+function formatarDataBrasileira(dateString) {
+    const date = new Date(dateString + 'T00:00:00');
+    // Adicionado tratamento de erro para data inválida
+    if (isNaN(date)) {
+        return 'Data Inválida';
+    }
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const formatted = date.toLocaleDateString('pt-BR', options);
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('booking-modal');
@@ -264,41 +284,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Campos do formulário
     const contactInput = document.getElementById('client_contact');
+    const nameInput = document.getElementById('client_name');
     const submitButton = document.getElementById('submit-booking-button');
     // Elemento de feedback customizado (só existe se não houver erro de validação Laravel)
     const feedbackElement = document.getElementById('contact-validation-feedback');
+
+    // Funções Blade injetadas (usando tags PHP no JS)
+    // CRÍTICO: Usando  para garantir sintaxe JS correta e evitar ParseErrors
+    const oldDate = @json(old('data_reserva'));
+    const oldStart = @json(old('hora_inicio'));
+    const oldEnd = @json(old('hora_fim'));
+    const oldPrice = @json(old('price')); // Valor numérico bruto
+    const oldContactValue = @json(old('contato_cliente'));
 
     /**
      * Atualiza o estado de validação do input de contato e do botão de envio.
      */
     function updateValidationState() {
-        if (!contactInput) return; // Garante que o input existe
+        if (!contactInput || !submitButton) return;
 
         const isValid = validateContact(contactInput.value);
-        const hasBackendError = '{{ $errors->has("client_contact") }}' === '1'; // Verifica se o Blade renderizou o erro
+        // Checa se o Laravel retornou erro para 'contato_cliente'
+        // CRÍTICO: Usando para injetar o booleano de forma segura, resolvendo o ParseError.
+        const hasBackendError = @json($errors->has("contato_cliente"));
 
-        // 1. Atualizar o Botão de Envio
-        // O botão só deve ser ativado se for válido E não houver erro de backend (se estiver reabrindo o modal)
         const canSubmit = isValid && !hasBackendError;
         submitButton.disabled = !canSubmit;
         submitButton.classList.toggle('opacity-50', !canSubmit);
         submitButton.classList.toggle('cursor-not-allowed', !canSubmit);
 
 
-        // 2. Atualizar Feedback Visual (apenas se não houver erro de backend)
+        // Atualizar Feedback Visual (apenas se não houver erro de backend)
         if (!hasBackendError && feedbackElement) {
             if (contactInput.value.length === 0) {
                 feedbackElement.textContent = 'Aguardando 10 ou 11 dígitos (DDD + número).';
-                feedbackElement.classList.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400');
-                feedbackElement.classList.add('text-gray-500', 'dark:text-gray-400');
+                feedbackElement.className = 'text-xs mt-1 font-semibold text-gray-500 dark:text-gray-400 transition duration-300';
             } else if (isValid) {
                 feedbackElement.textContent = '✅ WhatsApp OK.';
-                feedbackElement.classList.remove('text-red-600', 'dark:text-red-400', 'text-gray-500', 'dark:text-gray-400');
-                feedbackElement.classList.add('text-green-600', 'dark:text-green-400');
+                feedbackElement.className = 'text-xs mt-1 font-semibold text-green-600 dark:text-green-400 transition duration-300';
             } else {
                 feedbackElement.textContent = '❌ Número incompleto ou formato incorreto (Ex: 99 999999999)';
-                feedbackElement.classList.remove('text-green-600', 'dark:text-green-400', 'text-gray-500', 'dark:text-gray-400');
-                feedbackElement.classList.add('text-red-600', 'dark:text-red-400');
+                feedbackElement.className = 'text-xs mt-1 font-semibold text-red-600 dark:text-red-400 transition duration-300';
             }
         }
     }
@@ -307,26 +333,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (contactInput) {
         // Listener para aplicar máscara e validar em tempo real
         contactInput.addEventListener('input', (e) => {
-            // 1. Aplica a máscara no valor
             e.target.value = maskWhatsapp(e.target.value);
-            // 2. Atualiza o estado
             updateValidationState();
         });
 
         // Aplica a máscara no valor 'old' se ele existir
-        if (contactInput.value) {
-            contactInput.value = maskWhatsapp(contactInput.value);
+        if (oldContactValue) {
+            contactInput.value = maskWhatsapp(oldContactValue);
         }
     }
 
-    function formatarDataBrasileira(dateString) {
-        const date = new Date(dateString + 'T00:00:00');
-        // Define o locale 'pt-BR' para garantir dia da semana e mês corretos
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        // Garante que a primeira letra seja maiúscula para o nome do dia
-        const formatted = date.toLocaleDateString('pt-BR', options);
-        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-    }
 
     // Abertura do Modal por clique nos horários
     document.querySelectorAll('.open-modal').forEach(button => {
@@ -334,36 +350,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const date = button.dataset.date;
             const start = button.dataset.start;
             const end = button.dataset.end;
-            // Garante que o preço seja formatado corretamente para exibição (R$,xx)
-            const price = parseFloat(button.dataset.price).toFixed(2).replace('.', ',');
+            // O preço aqui é do dataset (numérico bruto) e formatado para display
+            const priceRaw = button.dataset.price;
+            const priceDisplay = parseFloat(priceRaw).toFixed(2).replace('.', ',');
+            const scheduleId = button.dataset.scheduleId;
 
             // Popula o Modal com os dados visuais
             document.getElementById('modal-date').textContent = formatarDataBrasileira(date);
             document.getElementById('modal-time').textContent = `${start} - ${end}`;
-            document.getElementById('modal-price').textContent = price;
+            document.getElementById('modal-price').textContent = priceDisplay;
 
             // Popula os campos hidden do formulário
             document.getElementById('form-date').value = date;
             document.getElementById('form-start').value = start;
             document.getElementById('form-end').value = end;
-            document.getElementById('form-price').value = button.dataset.price;
+            document.getElementById('form-price').value = priceRaw; // Crucial: valor bruto para o Controller
+            document.getElementById('form-schedule-id').value = scheduleId;
 
-            // Limpa campos de nome/contato se NÃO houver old() (prepara para nova submissão)
-            if ('{{ old('client_name') }}' === '') {
-                document.getElementById('client_name').value = '';
-            }
-            if ('{{ old('client_contact') }}' === '') {
-                document.getElementById('client_contact').value = '';
-            } else {
-                 // Reaplica a máscara no valor 'old' do contato, se estiver presente (sem erro de validação)
-                 contactInput.value = maskWhatsapp(contactInput.value);
-            }
+            // Limpa campos de nome/contato (ou usa old se existirem)
+            // Mantém o old() do nome apenas se for string não vazia.
+            if (nameInput) nameInput.value = @json(old('nome_cliente'));
+            if (contactInput) contactInput.value = oldContactValue ? maskWhatsapp(oldContactValue) : '';
 
             // Garante que o modal use a borda azul (padrão) ao ser aberto por clique
             modalContent.classList.remove('border-red-600', 'dark:border-red-500');
             modalContent.classList.add('border-indigo-600', 'dark:border-indigo-500');
 
-            // Atualiza o estado de validação para o novo estado (limpo ou com old())
+            // O estado de validação inicial
             updateValidationState();
 
             modal.classList.remove('hidden');
@@ -371,28 +384,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Reabrir Modal se a validação falhou e houver dados antigos (old('date') indica submissão)
-    @if ($errors->any() && old('date') && old('start_time'))
-        const oldDate = '{{ old('date') }}';
-        const oldStart = '{{ old('start_time') }}';
-        const oldEnd = '{{ old('end_time') }}';
-        const oldPrice = parseFloat('{{ old('price') }}').toFixed(2).replace('.', ',');
+    // Reabrir Modal se a validação falhou e houver dados antigos
+    if (oldDate && oldStart) {
+        // Garante que o preço 'old' seja formatado corretamente para exibição
+        const formattedOldPrice = parseFloat(oldPrice).toFixed(2).replace('.', ',');
 
         document.getElementById('modal-date').textContent = formatarDataBrasileira(oldDate);
         document.getElementById('modal-time').textContent = `${oldStart} - ${oldEnd}`;
-        document.getElementById('modal-price').textContent = oldPrice;
+        document.getElementById('modal-price').textContent = formattedOldPrice;
 
-        if (contactInput && contactInput.value) {
-            // Reaplica a máscara no valor 'old' que foi submetido
-            contactInput.value = maskWhatsapp(contactInput.value);
-        }
-
-        // A borda vermelha já foi aplicada condicionalmente pelo Blade.
         // O estado de validação será atualizado abaixo.
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-    @endif
+    }
 
     // ATUALIZAÇÃO INICIAL do estado de validação após o DOM e os old() terem sido carregados
     if (contactInput) {
@@ -417,3 +422,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 </x-guest-layout>
+

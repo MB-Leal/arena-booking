@@ -27,16 +27,16 @@ class StoreReservaRequest extends FormRequest
             // Nomes de input SINCRONIZADOS com create.blade.php
 
             // Campos do Cliente
-            'nome_cliente'    => ['required', 'string', 'max:255'],
-            'contato_cliente' => ['required', 'string', 'max:50'],
+            'nome_cliente'      => ['required', 'string', 'max:255'],
+            'contato_cliente'   => ['required', 'string', 'max:50'],
 
             // Campos de Horário
             // Agora usa 'data_reserva'
-            'data_reserva'    => ['required', 'date', "after_or_equal:{$minDate}"],
+            'data_reserva'      => ['required', 'date', "after_or_equal:{$minDate}"],
             // Agora usa 'hora_inicio'
-            'hora_inicio'     => ['required', 'date_format:H:i'],
+            'hora_inicio'       => ['required', 'date_format:H:i'],
             // Agora usa 'hora_fim'
-            'hora_fim'        => ['required', 'date_format:H:i', 'after:hora_inicio'],
+            'hora_fim'          => ['required', 'date_format:H:i', 'after:hora_inicio'],
 
             // O campo 'price' foi removido da validação, pois não está no formulário.
             // Se ele for um campo obrigatório no seu Controller, certifique-se de adicioná-lo ao Blade.

@@ -2,17 +2,14 @@
 
 namespace App\Http\Controllers;
 
-// Imports do seu código original
 use App\Models\User;
 use App\Models\Reserva;
+use App\Models\Horario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-
-// 💡 IMPORTS ADICIONADOS/CORRIGIDOS
-use App\Models\Horario;     // ⬅️ CORREÇÃO: Usar o modelo Horario.php
-use Carbon\CarbonPeriod;     // Necessário para o loop de datas
-use Illuminate\Support\Carbon; // Corrigido para o namespace correto do Carbon
+use Carbon\CarbonPeriod;
+use Illuminate\Support\Carbon;
 
 class AdminController extends Controller
 {
@@ -22,26 +19,18 @@ class AdminController extends Controller
     public function dashboard()
     {
         // 1. Buscar todas as reservas confirmadas
-        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA) // Usando constante
+        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
                             ->with('user')
                             ->get()
-                            // CRÍTICO: Filtra quaisquer itens nulos/corrompidos na coleção antes do loop.
                             ->filter();
 
         // 2. Formatar as reservas para o FullCalendar
         $events = [];
         foreach ($reservas as $reserva) {
 
-            // Verificação de segurança para dados corrompidos
-            if (!isset($reserva->getAttributes()['date']) || !$reserva->start_time) {
-                continue; // Pula a reserva se dados essenciais faltarem
-            }
-
-            // CORREÇÃO CRÍTICA DA DATA: Acessa o atributo de forma bruta.
-            $bookingDate = $reserva->getAttributes()['date'];
+            // 💡 CORRIGIDO: Usa $reserva->date diretamente
+            $bookingDate = $reserva->date->toDateString();
             $startDateTimeString = $bookingDate . ' ' . $reserva->start_time;
-
-            // CORREÇÃO CRÍTICA DO TIMEZONE: Usamos o timezone da aplicação (config/app.php).
             $start = Carbon::parse($startDateTimeString);
 
             if ($reserva->end_time) {
@@ -51,10 +40,8 @@ class AdminController extends Controller
                 $end = $start->copy()->addHour();
             }
 
-            // CORRIGIDO: Usa optional() para lidar com $reserva->user nulo.
             $userName = optional($reserva->user)->name;
             $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
-
             $title = 'Reservado: ' . $clientName;
 
             if (isset($reserva->price)) {
@@ -72,16 +59,13 @@ class AdminController extends Controller
         }
 
         $eventsJson = json_encode($events);
-        $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count(); // Usa constante
+        $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
         return view('dashboard', compact('eventsJson', 'reservasPendentesCount'));
     }
 
-    // --- Métodos de CRUD de Reservas ---
+    // --- Métodos de Listagem, Ação e Status de Reservas ---
 
-    /**
-     * Exibe a lista de reservas pendentes (Pré-reservas de clientes).
-     */
     public function indexReservas()
     {
         $reservas = Reserva::where('status', Reserva::STATUS_PENDENTE)
@@ -94,9 +78,6 @@ class AdminController extends Controller
         return view('admin.reservas.index', compact('reservas', 'pageTitle'));
     }
 
-    /**
-     * Exibe a lista de todas as reservas confirmadas.
-     */
     public function confirmed_index(Request $request)
     {
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
@@ -110,7 +91,7 @@ class AdminController extends Controller
         } else {
             $pageTitle = 'Todas as Reservas Confirmadas';
         }
-
+        // 💡 CORRIGIDO: Ordenação pela coluna 'date'
         $reservas = $query->orderBy('date', 'desc')
                             ->orderBy('start_time', 'asc')
                             ->paginate(15);
@@ -118,77 +99,133 @@ class AdminController extends Controller
         return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine'));
     }
 
-    /**
-     * Confirma uma reserva (muda status para 'confirmed').
-     */
+    public function showReserva(Reserva $reserva)
+    {
+        $reserva->load('user');
+        return view('admin.reservas.show', compact('reserva'));
+    }
+
     public function confirmarReserva(Reserva $reserva)
     {
         try {
             // 1. Verificação de Conflito
-            $start_time_carbon = Carbon::parse($reserva->date . ' ' . $reserva->start_time);
-            $end_time_carbon = Carbon::parse($reserva->date . ' ' . $reserva->end_time);
+            $dateString = $reserva->date->toDateString(); // 💡 CORRIGIDO: Usando 'date'
+            $start_time_carbon = Carbon::parse($dateString . ' ' . $reserva->start_time);
+            $end_time_carbon = Carbon::parse($dateString . ' ' . $reserva->end_time);
 
             $isConflict = Reserva::where('id', '!=', $reserva->id)
-                                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA])
-                                    ->where('date', $start_time_carbon->toDateString())
-                                    ->where(function ($q) use ($start_time_carbon, $end_time_carbon) {
-                                        $q->where('start_time', '<', $end_time_carbon->toTimeString())
-                                          ->where('end_time', '>', $start_time_carbon->toTimeString());
-                                    })->exists();
+                                        ->whereIn('status', [Reserva::STATUS_CONFIRMADA])
+                                        ->where('date', $dateString) // 💡 CORRIGIDO: Usando 'date'
+                                        ->where(function ($q) use ($start_time_carbon, $end_time_carbon) {
+                                            $q->where('start_time', '<', $end_time_carbon->toTimeString())
+                                                ->where('end_time', '>', $start_time_carbon->toTimeString());
+                                        })->exists();
 
             if ($isConflict) {
                 return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento CONFIRMADO no mesmo horário.');
             }
 
             // 2. Confirma a reserva
-            $reserva->status = Reserva::STATUS_CONFIRMADA; // Usa constante
+            $reserva->status = Reserva::STATUS_CONFIRMADA;
             $reserva->save();
 
             return redirect()->route('dashboard')
-                                ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
+                                 ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao confirmar a reserva: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Rejeita uma reserva pendente (muda status para 'rejected').
-     */
     public final function rejeitarReserva(Reserva $reserva)
     {
         try {
-            $reserva->status = Reserva::STATUS_REJEITADA; // Usa constante
+            $reserva->status = Reserva::STATUS_REJEITADA;
             $reserva->save();
 
             return redirect()->route('admin.reservas.index')
-                                ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
+                                 ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao rejeitar a reserva: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Cancela uma reserva (muda status para 'cancelled').
-     */
     public function cancelarReserva(Reserva $reserva)
     {
         try {
-            $reserva->status = Reserva::STATUS_CANCELADA; // Usa constante
+            $reserva->status = Reserva::STATUS_CANCELADA;
             $reserva->save();
 
-            return redirect()->route('admin.reservas.index')
-                                ->with('success', 'Reserva cancelada com sucesso.');
+            return redirect()->route('admin.reservas.confirmed_index')
+                                 ->with('success', 'Reserva cancelada com sucesso.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao cancelar a reserva: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Gera uma série de reservas recorrentes (Horário Fixo) para um cliente.
-     */
+    public function updateStatusReserva(Request $request, Reserva $reserva)
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', Rule::in([
+                Reserva::STATUS_CONFIRMADA,
+                Reserva::STATUS_PENDENTE,
+                Reserva::STATUS_REJEITADA,
+                Reserva::STATUS_CANCELADA,
+            ])],
+        ]);
+
+        $newStatus = $validated['status'];
+
+        if ($newStatus === Reserva::STATUS_CONFIRMADA) {
+            try {
+                $dateString = $reserva->date->toDateString(); // 💡 CORRIGIDO: Usando 'date'
+                $start_time_carbon = Carbon::parse($dateString . ' ' . $reserva->start_time);
+                $end_time_carbon = Carbon::parse($dateString . ' ' . $reserva->end_time);
+
+                $isConflict = Reserva::where('id', '!=', $reserva->id)
+                                        ->where('status', Reserva::STATUS_CONFIRMADA)
+                                        ->where('date', $dateString) // 💡 CORRIGIDO: Usando 'date'
+                                        ->where(function ($q) use ($start_time_carbon, $end_time_carbon) {
+                                            $q->where('start_time', '<', $end_time_carbon->toTimeString())
+                                                ->where('end_time', '>', $start_time_carbon->toTimeString());
+                                        })->exists();
+
+                if ($isConflict) {
+                    return back()->with('error', 'Conflito detectado: Não é possível confirmar, pois já existe outro agendamento CONFIRMADO neste horário.');
+                }
+            } catch (\Exception $e) {
+                return back()->with('error', 'Erro na verificação de conflito: ' . $e->getMessage());
+            }
+        }
+
+        try {
+            $reserva->status = $newStatus;
+            $reserva->manager_id = auth()->id();
+            $reserva->save();
+
+            return redirect()->route('admin.reservas.show', $reserva)
+                             ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro ao atualizar o status da reserva: ' . $e->getMessage());
+        }
+    }
+
+    public function destroyReserva(Reserva $reserva)
+    {
+        try {
+            $reserva->delete();
+
+            return redirect()->route('admin.reservas.index')
+                             ->with('success', 'Reserva excluída permanentemente com sucesso.');
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro ao excluir a reserva: ' . $e->getMessage());
+        }
+    }
+
     public function makeRecurrent(Request $request)
     {
         // 1. Validação dos Dados
@@ -204,7 +241,7 @@ class AdminController extends Controller
 
         $startDate = Carbon::parse($validated['start_date']);
         $endDate = Carbon::parse($validated['end_date']);
-        $dayOfWeek = $startDate->dayOfWeek; // O dia da semana da primeira reserva (0=Dom a 6=Sáb)
+        $dayOfWeek = $startDate->dayOfWeek;
 
         $recurrentSeriesId = now()->timestamp . $validated['user_id'];
         $reservasCriadas = 0;
@@ -218,7 +255,7 @@ class AdminController extends Controller
             if ($currentDate->dayOfWeek === $dayOfWeek) {
 
                 // 3. Verificação de Conflito
-                $conflitoExistente = Reserva::where('date', $currentDate->toDateString())
+                $conflitoExistente = Reserva::where('date', $currentDate->toDateString()) // 💡 CORRIGIDO: Usando 'date'
                     ->where('status', Reserva::STATUS_CONFIRMADA)
                     ->where(function ($query) use ($validated) {
                         $query->where('start_time', '<', $validated['end_time'])
@@ -231,7 +268,7 @@ class AdminController extends Controller
                     Reserva::create([
                         'user_id' => $validated['user_id'],
                         'schedule_id' => null,
-                        'date' => $currentDate->toDateString(),
+                        'date' => $currentDate->toDateString(), // 💡 CORRIGIDO: Usando 'date'
                         'start_time' => $validated['start_time'],
                         'end_time' => $validated['end_time'],
                         'price' => $validated['price'],
@@ -240,8 +277,7 @@ class AdminController extends Controller
                         'notes' => $validated['notes'],
                         'status' => Reserva::STATUS_CONFIRMADA,
                         'recurrent_series_id' => $recurrentSeriesId,
-                        'is_recurrent' => true,
-                        // Adicionando o dia da semana (0-6)
+                        'is_fixed' => true,
                         'day_of_week' => $dayOfWeek,
                     ]);
                     $reservasCriadas++;
@@ -262,54 +298,41 @@ class AdminController extends Controller
     }
 
     // =================================================================
-    // 💡 MÉTODOS DE CRIAÇÃO MANUAL DE RESERVA (GESTOR) - CORRIGIDOS
+    // MÉTODOS DE CRIAÇÃO MANUAL DE RESERVA (GESTOR)
     // =================================================================
 
-    /**
-     * Exibe o formulário para o gestor criar uma reserva manual.
-     * 💡 CORREÇÃO: Adicionada a lógica para buscar e injetar os dias disponíveis.
-     */
     public function createReserva()
     {
         // 1. DADOS DE DISPONIBILIDADE RECORRENTE (Schedule - Reservas Fixas)
-        // (Usando convenção 0=Dom a 6=Sáb)
-
-        // a) Busca todos os slots de reserva fixos e ativos (chave de exclusão)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                   ->select('day_of_week', 'start_time', 'end_time')
-                                   ->get();
+                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                            ->select('day_of_week', 'start_time', 'end_time')
+                                            ->get();
 
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
-            // Garante que a chave use o padrão 0-6
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
         })->toArray();
 
-        // b) Busca schedules recorrentes e remove os slots ocupados por reservas fixas
-        $availableRecurringSchedules = Horario::whereNotNull('day_of_week') // ⬅️ CORREÇÃO: Usar Horario
+        $availableRecurringSchedules = Horario::whereNotNull('day_of_week')
                                              ->whereNull('date')
                                              ->where('is_active', true)
                                              ->get()
                                              ->filter(function ($schedule) use ($fixedReservaMap) {
-                                                 // Garante que a chave de checagem use o padrão 0-6
-                                                 $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                                 return !in_array($scheduleKey, $fixedReservaMap);
+                                                $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                return !in_array($scheduleKey, $fixedReservaMap);
                                              });
 
-        // c) Extrai os dias da semana (dayOfWeek: 0 a 6)
         $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
 
         // 2. DADOS DE DISPONIBILIDADE AVULSA (Schedule.date)
         $hoje = Carbon::today();
-        $diasParaVerificar = 180; // Período de busca
+        $diasParaVerificar = 180;
 
-        $adHocDates = Horario::whereNotNull('date') // ⬅️ CORREÇÃO: Usar Horario
+        $adHocDates = Horario::whereNotNull('date')
                              ->where('is_active', true)
-                             // 💡 FIX: Comparando Objeto Carbon (do DB) com Objeto Carbon ($hoje)
-                             ->where('date', '>=', $hoje)
-                             ->where('date', '<=', $hoje->copy()->addDays($diasParaVerificar))
-                             ->pluck('date') // Retorna Objetos Carbon
-                             // 💡 FIX: Mapeia os Objetos Carbon para Strings (YYYY-MM-DD)
+                             ->where('date', '>=', $hoje->toDateString())
+                             ->where('date', '<=', $hoje->copy()->addDays($diasParaVerificar)->toDateString())
+                             ->pluck('date')
                              ->map(fn($date) => $date->toDateString())
                              ->unique()
                              ->toArray();
@@ -320,7 +343,7 @@ class AdminController extends Controller
 
         foreach ($period as $date) {
             $currentDateString = $date->toDateString();
-            $dayOfWeek = $date->dayOfWeek; // 0 (Dom) a 6 (Sáb)
+            $dayOfWeek = $date->dayOfWeek;
 
             $isRecurringAvailable = in_array($dayOfWeek, $availableDayOfWeeks);
             $isAdHocAvailable = in_array($currentDateString, $adHocDates);
@@ -331,42 +354,35 @@ class AdminController extends Controller
         }
 
         // 4. RETORNO PARA A VIEW
-        // 💡 CORREÇÃO: Passa a variável $diasDisponiveisJson para a view.
         return view('admin.reservas.create', [
             'diasDisponiveisJson' => json_encode(array_values(array_unique($diasDisponiveisNoFuturo))),
         ]);
     }
 
-    /**
-     * Armazena uma nova reserva criada manualmente pelo gestor.
-     * 💡 CORREÇÃO: Alinhado os nomes dos campos da validação com o formulário
-     * (ex: 'nome_cliente' -> 'client_name').
-     */
     public function storeReserva(Request $request)
     {
-        // 💡 CORREÇÃO: Nomes dos campos alinhados com o formulário (create.blade.php)
         $data = $request->validate([
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|string|max:255',
             'date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
-            'price' => 'required|numeric|min:0', // 💡 Preço agora é obrigatório vindo do form
-            'schedule_id' => 'required|exists:schedules,id', // 💡 ID do horário
-            'notes' => 'nullable|string|max:500', // 💡 Campo de observações
+            'price' => 'required|numeric|min:0',
+            // 💡 CORREÇÃO CRÍTICA: Altera 'horarios' para 'schedules'
+            'schedule_id' => 'required|exists:schedules,id',
+            'notes' => 'nullable|string|max:500',
         ], [
             'date.after_or_equal' => 'A data da reserva deve ser hoje ou uma data futura.',
             'end_time.after' => 'A hora de fim deve ser depois da hora de início.',
         ]);
 
-        // 1. Prepara os dados de data/hora
         $date = $data['date'];
         $startTime = $data['start_time'];
         $endTime = $data['end_time'];
 
-        // 2. VERIFICAÇÃO CRUCIAL DE CONFLITO
+        // 2. VERIFICAÇÃO CRUCIAL DE CONFLITO (Confirmadas e Pendentes)
         $overlap = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->where('date', $date)
+            ->where('date', $date) // 💡 CORRIGIDO: Usando 'date'
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
                       ->where('end_time', '>', $startTime);
@@ -380,47 +396,125 @@ class AdminController extends Controller
         Reserva::create([
             'client_name' => $data['client_name'],
             'client_contact' => $data['client_contact'],
-            'price' => $data['price'], // 💡 Salva o preço vindo do formulário
-            'notes' => $data['notes'] ?? 'Reserva criada manualmente pelo gestor.', // 💡 Salva as notas
-            'schedule_id' => $data['schedule_id'], // 💡 Salva o ID do horário
-
-            'date' => $date,
+            'price' => $data['price'],
+            'notes' => $data['notes'] ?? 'Reserva criada manualmente pelo gestor.',
+            'schedule_id' => $data['schedule_id'],
+            'date' => $date, // 💡 CORRIGIDO: Usando 'date'
             'start_time' => $startTime,
             'end_time' => $endTime,
-
-            'manager_id' => auth()->id(), // Associa ao Gestor logado
-            'user_id' => null, // Cliente não autenticado
-            'status' => Reserva::STATUS_CONFIRMADA, // Confirmada na hora
-            'is_fixed' => false, // Manual é pontual
-            'day_of_week' => Carbon::parse($date)->dayOfWeek, // Salva o dia (0-6)
+            'manager_id' => auth()->id(),
+            'user_id' => null,
+            'status' => Reserva::STATUS_CONFIRMADA,
+            'is_fixed' => false,
+            'day_of_week' => Carbon::parse($date)->dayOfWeek,
+            'recurrent_series_id' => null,
         ]);
 
         return redirect()->route('admin.reservas.confirmed_index')->with('success', 'Reserva manual criada e confirmada com sucesso para ' . $data['client_name'] . '!');
     }
 
+    /**
+     * Calcula e retorna os horários disponíveis para uma data específica.
+     */
+    public function getAvailableTimes(Request $request)
+    {
+        // 1. Validação da Data
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
+        ]);
+
+        $dateString = $request->input('date');
+        $selectedDate = Carbon::parse($dateString);
+        $dayOfWeek = $selectedDate->dayOfWeek; // 0=Dom a 6=Sáb
+
+        // Se a data for hoje, precisamos checar os horários que já passaram
+        $isToday = $selectedDate->isToday();
+        $now = Carbon::now();
+
+        // A. Slots Fixos Ocupados por Reservas Fixas (Chave de Exclusão Recorrente)
+        $fixedReservaSlots = Reserva::where('is_fixed', true)
+                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                   ->select('day_of_week', 'start_time', 'end_time')
+                                   ->get();
+        $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
+            return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
+        })->toArray();
+
+        // B. Slots Definidos pelo Admin (Schedule) para esta data
+
+        // 1. Slots Recorrentes (Filtrados)
+        $recurringSchedules = Horario::whereNotNull('day_of_week')
+                                    ->whereNull('date')
+                                    ->where('is_active', true)
+                                    ->where('day_of_week', $dayOfWeek)
+                                    ->get()
+                                    ->filter(function ($schedule) use ($fixedReservaMap) {
+                                        $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                        return !in_array($scheduleKey, $fixedReservaMap);
+                                    });
+
+        // 2. Slots Avulsos (Específicos da Data)
+        $adHocSchedules = Horario::whereNotNull('date')
+                                 ->where('is_active', true)
+                                 ->where('date', $dateString)
+                                 ->get();
+
+        // 3. Combina e ordena os horários disponíveis definidos
+        $allSchedules = $recurringSchedules->merge($adHocSchedules)->sortBy('start_time');
+
+
+        // C. Slots Ocupados por Reservas Pontuais (Chave de Exclusão Pontual)
+        $existingReservations = Reserva::where('is_fixed', false)
+                                     ->whereDate('date', $dateString) // 💡 CORRIGIDO: Usando 'date'
+                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                     ->get();
+
+        // D. Filtra os horários disponíveis finais
+        $availableTimes = $allSchedules->filter(function ($schedule) use ($existingReservations, $isToday, $now, $selectedDate) {
+
+            // 1. Checagem de slots passados (apenas se for hoje)
+            $scheduleStartDateTime = Carbon::parse($selectedDate->toDateString() . ' ' . $schedule->start_time);
+
+            if ($isToday && $scheduleStartDateTime->lt($now)) {
+                return false;
+            }
+
+            // 2. Checagem de Conflito com Reservas Pontuais (occupied)
+            $isBooked = $existingReservations->contains(function ($reservation) use ($schedule) {
+                // Checa se há sobreposição de horário
+                return $reservation->start_time < $schedule->end_time && $reservation->end_time > $schedule->start_time;
+            });
+
+            return !$isBooked;
+        })->map(function ($schedule) {
+            // Formata os dados para o JavaScript
+            return [
+                'id' => $schedule->id,
+                'time_slot' => Carbon::parse($schedule->start_time)->format('H:i') . ' - ' . Carbon::parse($schedule->end_time)->format('H:i'),
+                'price' => number_format($schedule->price, 2, ',', '.'),
+                'start_time' => Carbon::parse($schedule->start_time)->format('H:i'),
+                'end_time' => Carbon::parse($schedule->end_time)->format('H:i'),
+                'raw_price' => $schedule->price,
+                'schedule_id' => $schedule->id,
+            ];
+        })->values();
+
+        return response()->json($availableTimes);
+    }
 
     // --- Métodos de CRUD de Usuários ---
 
-    /**
-     * Exibe a lista de usuários.
-     */
     public function indexUsers()
     {
         $users = User::orderBy('name', 'asc')->get();
         return view('admin.users.index', compact('users'));
     }
 
-    /**
-     * Exibe o formulário de criação de novo usuário.
-     */
     public function createUser()
     {
         return view('admin.users.create');
     }
 
-    /**
-     * Armazena o novo usuário (exclusivo para administradores).
-     */
     public function storeUser(Request $request)
     {
         $request->validate([

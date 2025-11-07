@@ -33,7 +33,6 @@ Route::get('/api/reservas/available-times', [ReservaController::class, 'getAvail
 
 // ===============================================
 // 🛡️ GRUPO DE ROTAS DE ADMIN/GESTOR (PROTEGIDO)
-// Aplica a autenticação ('auth') E a checagem de role ('gestor')
 // ===============================================
 Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
 
@@ -45,48 +44,50 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
     // ===============================================
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // ROTAS DE HORÁRIOS
+        // --- ROTAS DE HORÁRIOS (CRUD) ---
         Route::get('/horarios', [HorarioController::class, 'index'])->name('horarios.index');
-
-        // ROTA POST UNIFICADA. Usa o método 'store' do HorarioController
         Route::post('/horarios', [HorarioController::class, 'store'])->name('horarios.store');
-
-        // ROTA GET PARA EXIBIR O FORMULÁRIO DE EDIÇÃO
         Route::get('/horarios/{horario}/edit', [HorarioController::class, 'edit'])->name('horarios.edit');
-
-        // ROTA PATCH PARA SALVAR AS MUDANÇAS DE EDIÇÃO
         Route::patch('/horarios/{horario}', [HorarioController::class, 'update'])->name('horarios.update');
-
-        // Mapeia para o método correto 'updateStatus' (CamelCase)
         Route::patch('/horarios/{horario}/status', [HorarioController::class, 'updateStatus'])->name('horarios.update_status');
-
         Route::delete('/horarios/{horario}', [HorarioController::class, 'destroy'])->name('horarios.destroy');
 
 
-        // ROTAS DE GERENCIAMENTO DE RESERVAS
-        Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index');
+        // --- ROTAS DE GERENCIAMENTO DE RESERVAS ---
 
-        // ROTA PARA EXIBIR O FORMULÁRIO DE CRIAÇÃO MANUAL DE RESERVA
-        Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
-        // ROTA PARA PROCESSAR A CRIAÇÃO MANUAL DE RESERVA
-        Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
-
-
-        // NOVA ROTA: Processa o formulário para criar a série de reservas fixas (Horário Fixo para Cliente)
-        Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
-
+        // Listagens
+        Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index'); // Pendentes/Todas
         Route::get('reservas/confirmadas', [AdminController::class, 'confirmed_index'])->name('reservas.confirmed_index');
 
-        // ROTA DE CONFIRMAÇÃO
+        // Detalhes
+        Route::get('reservas/{reserva}/show', [AdminController::class, 'showReserva'])->name('reservas.show');
+
+        // Criação Manual (Gestor)
+        Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
+        Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
+        Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
+
+        // AÇÕES (STATUS E EXCLUSÃO)
+
+        // ROTA GENÉRICA: Usada para mudar o status de qualquer reserva (via formulário na tela 'show')
+        Route::patch('reservas/{reserva}/status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
+
+        // ROTA DE CONFIRMAÇÃO (Específica)
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
 
-        // ROTA DE REJEIÇÃO
-        Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejectReserva'])->name('reservas.rejeitar');
+        // ROTA DE REJEIÇÃO (Específica)
+        // ✅ CORRIGIDO: Nome do método alterado para 'rejeitarReserva'
+        Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
 
-        // ROTA DE CANCELAMENTO
-        Route::delete('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
+        // ROTA DE CANCELAMENTO (Específica)
+        // ✅ CORRIGIDO: Verbo alterado de DELETE para PATCH (mudança de status)
+        Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 
-        // ROTAS DE GERENCIAMENTO DE USUÁRIOS
+        // ROTA DE EXCLUSÃO PERMANENTE (Usada na lista geral)
+        Route::delete('reservas/{reserva}', [AdminController::class, 'destroyReserva'])->name('reservas.destroy');
+
+
+        // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS ---
         Route::get('users', [AdminController::class, 'indexUsers'])->name('users.index');
         Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
         Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');

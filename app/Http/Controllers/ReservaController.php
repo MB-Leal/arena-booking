@@ -49,7 +49,7 @@ class ReservaController extends Controller
             ->where(function ($query) use ($startTime, $endTime) {
                 // Checagem de overlap robusta: (Existente Inicia Antes da Nova Terminar) AND (Existente Termina Depois da Nova Começar)
                 $query->where('start_time', '<', $endTime)
-                    ->where('end_time', '>', $startTime);
+                      ->where('end_time', '>', $startTime);
             });
 
         if ($isFixed) {
@@ -98,9 +98,9 @@ class ReservaController extends Controller
         // Busca todas as reservas de cliente marcadas como fixas e ativas.
         // ====================================================================
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                   ->select('day_of_week', 'start_time', 'end_time')
-                                   ->get();
+                                       ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                       ->select('day_of_week', 'start_time', 'end_time')
+                                       ->get();
 
         // Mapeia os slots fixos reservados para fácil exclusão
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
@@ -111,11 +111,11 @@ class ReservaController extends Controller
 
         // 1. HORÁRIOS RECORRENTES FIXOS (Disponibilidade do Admin)
         $recurringSchedules = Schedule::whereNotNull('day_of_week')
-                                     ->whereNull('date')
-                                     ->where('is_active', true)
-                                     ->orderBy('day_of_week')
-                                     ->orderBy('start_time')
-                                     ->get();
+                                           ->whereNull('date')
+                                           ->where('is_active', true)
+                                           ->orderBy('day_of_week')
+                                           ->orderBy('start_time')
+                                           ->get();
 
         // ====================================================================
         // PASSO 2: FILTRA SLOTS RECORRENTES ANULADOS POR RESERVAS FIXAS
@@ -131,11 +131,11 @@ class ReservaController extends Controller
 
         // 2. HORÁRIOS AVULSOS: Onde date é definido e está dentro do período.
         $adHocSchedules = Schedule::whereNotNull('date')
-                                 ->where('is_active', true)
-                                 ->where('date', '>=', $startDate->toDateString())
-                                 ->where('date', '<=', $endDate->toDateString())
-                                 ->orderBy('start_time')
-                                 ->get();
+                                     ->where('is_active', true)
+                                     ->where('date', '>=', $startDate->toDateString())
+                                     ->where('date', '<=', $endDate->toDateString())
+                                     ->orderBy('start_time')
+                                     ->get();
 
         // === RETORNA AGENDA VAZIA SE NÃO HOVER REGISTROS ===
         if ($recurringSchedules->isEmpty() && $adHocSchedules->isEmpty()) {
@@ -153,7 +153,8 @@ class ReservaController extends Controller
         // Mapeia os slots ocupados para fácil verificação (chave: 'Y-m-d H:i')
         $occupiedMap = $occupiedSlots->mapWithKeys(function ($reserva) {
             // A chave aqui usa a data exata e o horário
-            $dateTime = Carbon::parse($reserva->date . ' ' . $reserva->start_time)->format('Y-m-d H:i');
+            // 💡 CORREÇÃO CRÍTICA: Usa toDateString() para obter apenas 'YYYY-MM-DD' e evitar o '00:00:00'.
+            $dateTime = Carbon::parse($reserva->date->toDateString() . ' ' . $reserva->start_time)->format('Y-m-d H:i');
             return [$dateTime => true];
         })->toArray();
 
@@ -194,7 +195,7 @@ class ReservaController extends Controller
 
                     $weeklySchedule[$currentDateString][] = [
                         'start_time' => $startTime->format('H:i'),
-                        'end_time'  => $endTime->format('H:i'),
+                        'end_time' => $endTime->format('H:i'),
                         'price' => $schedule->price,
                         'schedule_id' => $schedule->id,
                         'type' => $slotType, // Adiciona o tipo de slot
@@ -225,9 +226,9 @@ class ReservaController extends Controller
 
         // a) Busca todos os slots de reserva fixos e ativos (chave de exclusão)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                   ->select('day_of_week', 'start_time', 'end_time')
-                                   ->get();
+                                       ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                       ->select('day_of_week', 'start_time', 'end_time')
+                                       ->get();
 
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
@@ -235,14 +236,14 @@ class ReservaController extends Controller
 
         // b) Busca schedules recorrentes e remove os slots ocupados por reservas fixas
         $availableRecurringSchedules = Schedule::whereNotNull('day_of_week')
-                                             ->whereNull('date')
-                                             ->where('is_active', true)
-                                             ->get()
-                                             ->filter(function ($schedule) use ($fixedReservaMap) {
-                                                 // Remove slots de Schedule que são anulados por Reservas Fixas
-                                                 $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                                 return !in_array($scheduleKey, $fixedReservaMap);
-                                             });
+                                                     ->whereNull('date')
+                                                     ->where('is_active', true)
+                                                     ->get()
+                                                     ->filter(function ($schedule) use ($fixedReservaMap) {
+                                                         // Remove slots de Schedule que são anulados por Reservas Fixas
+                                                         $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                         return !in_array($scheduleKey, $fixedReservaMap);
+                                                     });
 
         // c) Extrai os dias da semana (dayOfWeek: 0 a 6) que têm pelo menos 1 slot recorrente disponível
         $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
@@ -281,21 +282,9 @@ class ReservaController extends Controller
             }
         }
 
-        // =================================================================
-        // >>> DEBUG CRÍTICO: SE ESTA LINHA EXECUTAR, O DEBUG VAI APARECER!
-        // =================================================================
-        dd([
-            'diasDisponiveisNoFuturo_COUNT' => count($diasDisponiveisNoFuturo),
-            'diasDisponiveisNoFuturo_SAMPLE' => array_slice($diasDisponiveisNoFuturo, 0, 10),
-            'availableDayOfWeeks_RECORRENTES' => $availableDayOfWeeks,
-            'adHocDates_AVULSOS_DB' => $adHocDates,
-        ]);
-        // =================================================================
-
-
         // 4. RETORNO PARA A VIEW
         return view('admin.reservas.create', [
-            'diasDisponiveisJson' => array_values(array_unique($diasDisponiveisNoFuturo)),
+            'diasDisponiveisJson' => json_encode(array_values(array_unique($diasDisponiveisNoFuturo))),
         ]);
     }
 
@@ -320,9 +309,9 @@ class ReservaController extends Controller
 
         // A. Slots Fixos Ocupados por Reservas Fixas (Chave de Exclusão Recorrente)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                   ->select('day_of_week', 'start_time', 'end_time')
-                                   ->get();
+                                       ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                       ->select('day_of_week', 'start_time', 'end_time')
+                                       ->get();
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
         })->toArray();
@@ -331,21 +320,21 @@ class ReservaController extends Controller
 
         // 1. Slots Recorrentes (Filtrados)
         $recurringSchedules = Schedule::whereNotNull('day_of_week')
-                                     ->whereNull('date')
-                                     ->where('is_active', true)
-                                     ->where('day_of_week', $dayOfWeek)
-                                     ->get()
-                                     ->filter(function ($schedule) use ($fixedReservaMap) {
-                                         // Remove slots de Schedule que são anulados por Reservas Fixas
-                                         $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                         return !in_array($scheduleKey, $fixedReservaMap);
-                                     });
+                                           ->whereNull('date')
+                                           ->where('is_active', true)
+                                           ->where('day_of_week', $dayOfWeek)
+                                           ->get()
+                                           ->filter(function ($schedule) use ($fixedReservaMap) {
+                                               // Remove slots de Schedule que são anulados por Reservas Fixas
+                                               $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                               return !in_array($scheduleKey, $fixedReservaMap);
+                                           });
 
         // 2. Slots Avulsos (Específicos da Data)
         $adHocSchedules = Schedule::whereNotNull('date')
-                                 ->where('is_active', true)
-                                 ->where('date', $dateString)
-                                 ->get();
+                                     ->where('is_active', true)
+                                     ->where('date', $dateString)
+                                     ->get();
 
         // 3. Combina e ordena os horários disponíveis definidos
         $allSchedules = $recurringSchedules->merge($adHocSchedules)->sortBy('start_time');
@@ -353,9 +342,9 @@ class ReservaController extends Controller
 
         // C. Slots Ocupados por Reservas Pontuais (Chave de Exclusão Pontual)
         $existingReservations = Reserva::where('is_fixed', false) // Apenas reservas pontuais
-                                     ->whereDate('date', $dateString)
-                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                     ->get();
+                                           ->whereDate('date', $dateString)
+                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                           ->get();
 
         // D. Filtra os horários disponíveis finais
         $availableTimes = $allSchedules->filter(function ($schedule) use ($existingReservations, $isToday, $now) {
@@ -383,6 +372,7 @@ class ReservaController extends Controller
                 'start_time' => Carbon::parse($schedule->start_time)->format('H:i'),
                 'end_time' => Carbon::parse($schedule->end_time)->format('H:i'),
                 'raw_price' => $schedule->price, // Valor numérico para o campo hidden
+                'schedule_id' => $schedule->id, // Chave esperada pelo JS
             ];
         })->values();
 
@@ -402,8 +392,18 @@ class ReservaController extends Controller
         $endTime = $validated['hora_fim'];
         $clientName = $validated['nome_cliente'];
         $clientContact = $validated['contato_cliente'];
-        $price = $validated['preco'];
+
+        // 💡 CORREÇÃO CRÍTICA DO ERRO:
+        // A chave no Request é 'price', não 'preco'. Usamos $request->input() para ler o campo hidden.
+        $price = $request->input('price');
+
         $isFixed = $request->input('is_fixed', false);
+
+        // Verifica se 'price' foi realmente recebido para evitar erros (Embora a validação já devesse garantir isto)
+        if (is_null($price)) {
+             return redirect()->route('reserva.index')->with('error', 'O valor da reserva (price) não foi enviado corretamente. Por favor, selecione o horário novamente.');
+        }
+
 
         // ✅ Checagem unificada de conflito
         if ($this->checkOverlap($date, $startTime, $endTime, $isFixed)) {
@@ -420,34 +420,35 @@ class ReservaController extends Controller
 
 
         $reserva = Reserva::create([
-            'date'           => $date,
-            'start_time'     => $startTime,
-            'end_time'       => $endTime,
-            'client_name'    => $clientName,
+            'date' => $date,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'client_name' => $clientName,
             'client_contact' => $clientContact,
-            'price'          => $price,
-            'status'         => Reserva::STATUS_PENDENTE, // Usando constante
-            'is_fixed'       => $isFixed, // Adiciona is_fixed
-            'day_of_week'    => $dayOfWeek, // Garante que o dia da semana é salvo
+            'price' => $price,
+            'status' => Reserva::STATUS_PENDENTE, // Usando constante
+            'is_fixed' => $isFixed, // Adiciona is_fixed
+            'day_of_week' => $dayOfWeek, // Garante que o dia da semana é salvo
         ]);
 
         $whatsappNumber = '91985320997'; // Altere para o seu número WhatsApp
 
+        // 💡 Correção: Usa toDateString() aqui também por segurança, embora geralmente funcione.
         $data = Carbon::parse($reserva->date)->format('d/m/Y');
         $hora = Carbon::parse($reserva->start_time)->format('H:i');
 
         $messageText = "🚨 NOVA PRÉ-RESERVA PENDENTE\n\n" .
-                       "Cliente: {$reserva->client_name}\n" .
-                       "Contato: {$reserva->client_contact}\n" .
-                       "Data/Hora: {$data} às {$hora}\n" .
-                       "Valor: R$ " . number_format($reserva->price, 2, ',', '.') . "\n" .
-                       ($reserva->is_fixed ? "Tipo: HORÁRIO FIXO SEMANAL\n" : "Tipo: RESERVA PONTUAL\n");
+            "Cliente: {$reserva->client_name}\n" .
+            "Contato: {$reserva->client_contact}\n" .
+            "Data/Hora: {$data} às {$hora}\n" .
+            "Valor: R$ " . number_format($reserva->price, 2, ',', '.') . "\n" .
+            ($reserva->is_fixed ? "Tipo: HORÁRIO FIXO SEMANAL\n" : "Tipo: RESERVA PONTUAL\n");
 
         $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
 
         return redirect()->route('reserva.index')
-                         ->with('whatsapp_link', $whatsappLink)
-                         ->with('success', 'Pré-reserva enviada! Por favor, entre em contato via WhatsApp para confirmar o agendamento.');
+            ->with('whatsapp_link', $whatsappLink)
+            ->with('success', 'Pré-reserva enviada! Por favor, entre em contato via WhatsApp para confirmar o agendamento.');
     }
 
     /**
@@ -471,7 +472,8 @@ class ReservaController extends Controller
             // 2. Regra de Negócio Crítica: Impedir confirmação (confirmed) se o slot já estiver ocupado.
             if ($newStatus === Reserva::STATUS_CONFIRMADA) {
                 // Checa conflito contra TODAS as outras reservas ativas, ignorando a própria reserva.
-                $date = $reserva->date;
+                // 💡 Corrigindo a passagem de $date para usar toDateString() por segurança, já que é um objeto Carbon.
+                $date = $reserva->date->toDateString();
                 $startTime = $reserva->start_time;
                 $endTime = $reserva->end_time;
                 $isFixed = $reserva->is_fixed;

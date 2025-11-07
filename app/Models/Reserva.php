@@ -4,21 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\User;
-use App\Models\Schedule;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Reserva extends Model
 {
     use HasFactory;
 
+    // ------------------------------------------------------------------------
     // CONSTANTES DE STATUS
-    const STATUS_PENDENTE = 'pending';
-    const STATUS_CONFIRMADA = 'confirmed';
-    const STATUS_CANCELADA = 'cancelled';
-    const STATUS_EXPIRADA = 'expired';
-    const STATUS_REJEITADA = 'rejected';
+    // ------------------------------------------------------------------------
+    public const STATUS_PENDENTE = 'pending';
+    public const STATUS_CONFIRMADA = 'confirmed';
+    public const STATUS_CANCELADA = 'cancelled';
+    public const STATUS_REJEITADA = 'rejected';
+    public const STATUS_EXPIRADA = 'expired'; // Se o tempo de pré-reserva acabar
 
-    // CAMPOS PREENCHÍVEIS
+    /**
+     * Os atributos que são mass assignable.
+     * Inclui campos de cliente, agendamento e gestão.
+     */
     protected $fillable = [
         'user_id',
         'schedule_id',
@@ -30,66 +34,69 @@ class Reserva extends Model
         'client_contact',
         'notes',
         'status',
-
-        // 🔑 NOVO: Permitir preenchimento do ID do Gestor que criou a reserva manual
-        'manager_id',
-
-        // 💡 NOVOS CAMPOS PARA RECORRÊNCIA
-        'recurrent_series_id', // ID para agrupar todas as reservas de uma série fixa (ex: 20 semanas)
-        'is_recurrent'         // Flag para indicar que esta reserva faz parte de uma série
-    ];
-
-    // CRÍTICO: Define o casting para string para evitar a confusão do Eloquent.
-    protected $casts = [
-        'date' => 'string',
-        'start_time' => 'string',
-        'end_time' => 'string',
+        'manager_id',           // ID do gestor que criou/confirmou
+        'is_fixed',             // Se é uma reserva fixa recorrente (CRÍTICO: Faltava na sua versão)
+        'day_of_week',          // Dia da semana para reservas fixas (CRÍTICO: Faltava na sua versão)
+        'recurrent_series_id',  // ID da série recorrente (se for fixa)
+        'week_index',           // Índice dentro da série (se for fixa)
     ];
 
     /**
-     * Relacionamento com o usuário (cliente que fez a reserva).
+     * Os atributos que devem ser convertidos (casted) para tipos nativos.
      */
-    public function user()
+    protected $casts = [
+        'date' => 'date',       // CORRIGIDO: Deve ser 'date' para manipular o Carbon
+        'is_fixed' => 'boolean', // CRÍTICO: Conversão para booleano
+    ];
+
+
+    // ------------------------------------------------------------------------
+    // RELACIONAMENTOS
+    // ------------------------------------------------------------------------
+
+    /**
+     * Relação com o Usuário (o cliente que fez a reserva, se houver)
+     */
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id'); // 💡 Explicitando a chave para maior clareza
+        // Assume que o modelo User é App\Models\User
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     /**
-     * 🔑 NOVO: Relacionamento com o gestor (usuário) que criou a reserva manual.
+     * Relação com o Gestor que manipulou ou criou a reserva (se houver)
      */
-    public function manager()
+    public function manager(): BelongsTo
     {
-        // Define a relação com o modelo User usando a chave estrangeira 'manager_id'
+        // Usamos o modelo User para referenciar o gestor
         return $this->belongsTo(User::class, 'manager_id');
     }
 
-
     /**
-     * Relacionamento com a regra de horário fixo (Schedule).
+     * Relação com a regra de horário (Schedule) que originou a reserva.
      */
-    public function schedule()
+    public function schedule(): BelongsTo
     {
         return $this->belongsTo(Schedule::class, 'schedule_id');
     }
 
+
+    // ------------------------------------------------------------------------
+    // ACESSORES
+    // ------------------------------------------------------------------------
+
     /**
-     * Acessório para retornar o nome do status em português.
+     * Retorna o nome amigável do status (usado nas listas do Admin).
      */
-    public function getStatusTextAttribute()
+    public function getStatusTextAttribute(): string
     {
-        switch ($this->status) {
-            case self::STATUS_PENDENTE:
-                return 'Pendente';
-            case self::STATUS_CONFIRMADA:
-                return 'Confirmada';
-            case self::STATUS_CANCELADA:
-                return 'Cancelada';
-            case self::STATUS_REJEITADA:
-                return 'Rejeitada';
-            case self::STATUS_EXPIRADA:
-                return 'Expirada';
-            default:
-                return 'Desconhecido';
-        }
+        return match ($this->status) {
+            self::STATUS_PENDENTE => 'Pendente',
+            self::STATUS_CONFIRMADA => 'Confirmada',
+            self::STATUS_CANCELADA => 'Cancelada',
+            self::STATUS_REJEITADA => 'Rejeitada',
+            self::STATUS_EXPIRADA => 'Expirada',
+            default => 'Desconhecido',
+        };
     }
 }
