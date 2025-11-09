@@ -12,5 +12,5 @@ jobs:
       with:
         host: ${{ secrets.HOST }} 
         user: ${{ secrets.USER }}
-        password: ${{ secrets.PASS }}
+        password: ${{ secrets.PASSWORD }}
         localDir: "dist"
