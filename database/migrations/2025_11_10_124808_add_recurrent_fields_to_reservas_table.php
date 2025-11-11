@@ -1,57 +1,85 @@
 <?php
 
+
+
 use Illuminate\Database\Migrations\Migration;
+
 use Illuminate\Database\Schema\Blueprint;
+
 use Illuminate\Support\Facades\Schema;
 
+
+
 return new class extends Migration
+
 {
+
     /**
+
      * Run the migrations.
+
      */
+
     public function up(): void
+
     {
+
         Schema::table('reservas', function (Blueprint $table) {
 
-            // Verifica antes de adicionar 'is_fixed'
+            // Verifica se a coluna is_fixed existe antes de adicionar
+
             if (!Schema::hasColumn('reservas', 'is_fixed')) {
+
+                // Coluna que indica se a reserva é recorrente/fixa
+
                 $table->boolean('is_fixed')->default(false)->after('status');
+
             }
 
-            // Verifica antes de adicionar 'day_of_week'
+
+
+            // Verifica se a coluna day_of_week existe antes de adicionar
+
             if (!Schema::hasColumn('reservas', 'day_of_week')) {
-                $table->tinyInteger('day_of_week')->nullable()->index()->after('is_fixed');
+
+                // Dia da semana para reservas fixas (0=Dom, 1=Seg, etc.)
+
+                $table->tinyInteger('day_of_week')->nullable()->after('is_fixed');
+
             }
 
-            // Verifica antes de adicionar 'recurrent_series_id'
+
+
+            // Opcional: Adicionar um campo para agrupar reservas recorrentes, se você usa isso.
+
             if (!Schema::hasColumn('reservas', 'recurrent_series_id')) {
-                $table->uuid('recurrent_series_id')->nullable()->index()->after('day_of_week');
+
+                 $table->unsignedBigInteger('recurrent_series_id')->nullable()->after('day_of_week');
+
             }
 
-            // Verifica antes de adicionar 'week_index'
-            if (!Schema::hasColumn('reservas', 'week_index')) {
-                $table->integer('week_index')->nullable()->after('recurrent_series_id');
-            }
         });
+
     }
+
+
 
     /**
+
      * Reverse the migrations.
+
      */
+
     public function down(): void
+
     {
+
         Schema::table('reservas', function (Blueprint $table) {
-            // Também é uma boa prática verificar antes de remover,
-            // embora 'dropIfExists' seja o ideal.
-            // Mas para consistência com o up(), faremos assim:
 
-            $columnsToDrop = ['is_fixed', 'day_of_week', 'recurrent_series_id', 'week_index'];
+            $table->dropColumn(['is_fixed', 'day_of_week', 'recurrent_series_id']);
 
-            foreach ($columnsToDrop as $column) {
-                if (Schema::hasColumn('reservas', $column)) {
-                    $table->dropColumn($column);
-                }
-            }
         });
+
     }
+
 };

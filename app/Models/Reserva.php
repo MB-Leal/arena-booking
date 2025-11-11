@@ -53,6 +53,32 @@ class Reserva extends Model
         'is_fixed' => 'boolean', // Conversão para booleano
     ];
 
+    // ------------------------------------------------------------------------
+    // SCOPES LOCAIS (CORREÇÃO DA DISPONIBILIDADE)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Scope local para retornar todas as reservas que ESTÃO OCUPANDO um horário.
+     * CRÍTICO: Este scope exclui as reservas que foram canceladas, rejeitadas ou expiradas.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $checkDate Data que você deseja verificar (Ex: '2025-11-20')
+     * @param string $checkStartTime Hora de início do slot (Ex: '10:00:00')
+     * @param string $checkEndTime Hora de fim do slot (Ex: '11:00:00')
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeIsOccupied($query, string $checkDate, string $checkStartTime, string $checkEndTime)
+    {
+        // CORREÇÃO: Deve incluir PENDENTE e CONFIRMADA para ser considerado "ocupado".
+        return $query->where('date', $checkDate) // 1. Filtra pela data específica
+            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]) // 2. FILTRO CRÍTICO: Inclui Pendente e Confirmada
+            ->where(function ($q) use ($checkStartTime, $checkEndTime) {
+                // 3. Lógica de sobreposição de tempo (usando as strings de hora 'HH:MM:SS')
+                $q->where('start_time', '<', $checkEndTime)
+                    ->where('end_time', '>', $checkStartTime);
+            });
+    }
+
 
     // ------------------------------------------------------------------------
     // RELACIONAMENTOS
@@ -104,7 +130,6 @@ class Reserva extends Model
 
     /**
      * Retorna o nome do criador (Gestor ou Cliente via Web).
-     * Este é o Accessor que resolve o seu problema de exibição.
      */
     public function getCriadoPorLabelAttribute(): string
     {

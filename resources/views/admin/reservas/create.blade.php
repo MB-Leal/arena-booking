@@ -38,7 +38,7 @@
             @endif
             @if (session('warning'))
                 <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-6 shadow-md" role="alert">
-                     <span class="font-semibold">Aviso:</span>
+                    <span class="font-semibold">Aviso:</span>
                     <span class="block sm:inline ml-2">{{ session('warning') }}</span>
                 </div>
             @endif
@@ -140,8 +140,8 @@
                     <div class="block pt-4 mt-4 border-t border-green-200">
                         <label for="is_fixed" class="flex items-center space-x-3 cursor-pointer">
                             <input type="checkbox" id="is_fixed" name="is_fixed" value="1"
-                                   class="h-5 w-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                   {{ old('is_fixed') ? 'checked' : '' }}>
+                                        class="h-5 w-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                        {{ old('is_fixed') ? 'checked' : '' }}>
                             <div class="flex flex-col">
                                 <span class="text-sm text-gray-800 font-semibold">Deixar fixo (Repetir semanalmente por 1 ano)</span>
                                 <p class="text-xs text-gray-500 mt-1">
@@ -158,7 +158,7 @@
                 </div>
 
                 <div class="flex items-center justify-between pt-4">
-                    <x-primary-button id="submit-button" class="bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500 py-3 px-6 text-base font-semibold transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                    <x-primary-button id="submit-button" class="bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-700 py-3 px-6 text-base font-semibold transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fas fa-calendar-check mr-2"></i> {{ __('Agendar e Confirmar Reserva') }}
                     </x-primary-button>
 
@@ -172,7 +172,6 @@
     </div>
 </div>
 
-{{-- O SCRIPT É QUASE IDÊNTICO, APENAS UMA LINHA ADICIONADA --}}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Elementos DOM
@@ -190,15 +189,12 @@
         const today = new Date().toISOString().split('T')[0];
 
         // 1. INJEÇÃO DA LISTA DE DIAS DISPONÍVEIS DO BACKEND (Laravel Blade)
+        // Mantida apenas para referência e compatibilidade, não para a validação principal.
         let availableDates = [];
         try {
-            // A string JSON vinda do PHP
             const jsonString = '{!! $diasDisponiveisJson ?? "[]" !!}';
-
-            // Tentamos o primeiro parse.
             let parsedData = JSON.parse(jsonString);
 
-            // Lógica à prova de cache: Se o resultado do parse AINDA for uma string, fazemos o parse novamente.
             if (typeof parsedData === 'string' && parsedData.startsWith('[')) {
                 parsedData = JSON.parse(parsedData);
             }
@@ -210,10 +206,7 @@
             availableDates = [];
         }
 
-        // Cria um Set para pesquisa rápida (O(1))
-        const availableDatesSet = new Set(availableDates);
-
-        dataInput.min = today; // Configura o atributo HTML 'min'
+        dataInput.min = today;
         submitButton.disabled = true;
 
         // ====================================================================
@@ -250,18 +243,12 @@
                 errorMessage = '❌ Você não pode agendar para uma data que já passou.';
             }
 
-            // 2. Validação de data configurada (Se a data não está no Set)
-            else if (!availableDatesSet.has(selectedDate)) {
-                isValid = false;
-                errorMessage = '❌ Data Indisponível. Não há horários ativos configurados para este dia.';
-            }
-
             // Aplica estilos e estado
             if (isValid) {
                 msgElement.classList.add('hidden');
                 dataInput.classList.remove('border-red-500', 'ring-2', 'ring-red-500');
 
-                // Se a data é válida, carregue os horários!
+                // Se a data é válida (não passada), carregue os horários!
                 fetchAvailableTimes(selectedDate);
 
             } else {
@@ -294,11 +281,27 @@
                 const response = await fetch(url);
 
                 if (!response.ok) {
-                    console.error(`API FALHOU: Status ${response.status} - ${response.statusText}`);
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorJson = await response.json();
+                    const backendErrorMsg = errorJson.message || `API FALHOU: Status ${response.status}`;
+
+                    timeSlotsContainer.innerHTML = '';
+                    noTimesMessage.textContent = backendErrorMsg;
+                    noTimesMessage.classList.remove('hidden');
+
+                    // Exibe a mensagem de erro principal
+                    msgElement.textContent = `❌ ${backendErrorMsg}`;
+                    msgElement.classList.remove('hidden');
+                    dataInput.classList.add('border-red-500', 'ring-2', 'ring-red-500');
+
+                    return;
                 }
 
                 const times = await response.json();
+
+                // ===========================================================
+                // LINHA DE LOG ADICIONADA AQUI PARA DEBUGAR O BACKEND
+                // ===========================================================
+                console.log('Horários Recebidos da API:', times);
 
                 renderAvailableTimes(times);
 
@@ -347,6 +350,10 @@
                 button.onclick = (e) => selectTimeSlot(e.currentTarget, slot);
                 timeSlotsContainer.appendChild(button);
             });
+
+            // Garante que a mensagem de erro do frontend seja escondida se o backend retornou horários
+            msgElement.classList.add('hidden');
+            dataInput.classList.remove('border-red-500', 'ring-2', 'ring-red-500');
         }
 
         /**
