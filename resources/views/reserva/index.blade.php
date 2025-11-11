@@ -56,6 +56,24 @@
             </div>
         @endif
 
+        <!-- ======================================================= -->
+        <!-- DEBUG PERSISTENTE CRÍTICO (Manter até o bug do contato sumir) -->
+        @php
+            $debugValue = session('agendamento:252');
+            $debugLength = session('agendamento:253');
+        @endphp
+
+        @if (session('agendamento:251') && $debugValue)
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md font-mono text-sm" role="alert">
+                <p class="font-bold">--- DEBUG PERSISTENTE (CRÍTICO) ---</p>
+                <p>Valor de Debug Persistente capturado na recarga: <span class="text-red-600">"{{ $debugValue }}"</span></p>
+                <p>Comprimento do valor capturado: <span class="text-red-600">{{ $debugLength }}</span> dígitos.</p>
+                <p>Se este valor for 10 ou 11, o erro está em um caractere invisível ou na regra de validação do Laravel. Caso contrário, o erro é no preenchimento.</p>
+                <p class="font-bold">--- FIM DEBUG PERSISTENTE ---</p>
+            </div>
+        @endif
+        <!-- ======================================================= -->
+
         @if (session('whatsapp_link'))
             <div class="bg-green-50 dark:bg-green-900/30 border border-green-400 dark:border-green-700 p-8 rounded-3xl relative mb-12 text-center shadow-2xl shadow-green-400/40 dark:shadow-green-900/70" role="alert">
                 <p class="font-extrabold mb-3 text-4xl text-green-700 dark:text-green-300">✅ RESERVA PRÉ-APROVADA!</p>
@@ -101,7 +119,7 @@
 
                     {{-- Card de Dia da Semana --}}
                     <div class="bg-gray-50 dark:bg-gray-900 p-6 rounded-3xl shadow-2xl hover:shadow-indigo-500/50 dark:hover:shadow-indigo-700/60 transition-all duration-300
-                         border-t-8 border-indigo-600 dark:border-indigo-500 flex flex-col h-full">
+                            border-t-8 border-indigo-600 dark:border-indigo-500 flex flex-col h-full">
 
                         {{-- Cabeçalho do Dia --}}
                         <h3 class="text-3xl font-black text-indigo-800 dark:text-indigo-300 pb-3 mb-5 uppercase tracking-wider
@@ -161,7 +179,12 @@
                             <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                             Correção Necessária!
                         </p>
-                        <p class="mt-1">Por favor, verifique os campos destacados em vermelho e tente novamente.</p>
+                        <p class="mt-1">
+                            Por favor, verifique os campos destacados em vermelho e tente novamente.
+                            <strong class="font-extrabold text-red-700 dark:text-red-300">
+                                (Consulte o Console (F12) para ver o valor exato que o backend recebeu, graças ao nosso debug persistente!)
+                            </strong>
+                        </p>
                     </div>
                 @endif
                 {{-- FIM NOVO ALERTA --}}
@@ -204,49 +227,51 @@
                 <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
                     @csrf
 
-                    {{-- Campos Hidden: RENOMEADOS para corresponder ao StoreReservaRequest e adicionado schedule_id --}}
+                    {{-- Campos Hidden --}}
                     <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
                     <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
                     <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
                     <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
-                    <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}"> {{-- CRÍTICO: NOVO CAMPO --}}
+                    <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
 
                     <div class="mb-5">
                         <label for="client_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Seu Nome Completo</label>
-                        {{-- Campo Nome: RENOMEADO para 'nome_cliente' --}}
-                        <input type="text" name="nome_cliente" id="client_name" required
+                        <input type="text" name="nome_cliente" id="client_name"
                             class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('nome_cliente') border-red-500 ring-1 ring-red-500 @enderror"
                             value="{{ old('nome_cliente') }}">
-                        {{-- Tag @error: CORRIGIDA para 'nome_cliente' --}}
                         @error('nome_cliente')
                             <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
                         @enderror
                     </div>
 
                     <div class="mb-8">
-                        <label for="client_contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Seu WhatsApp (apenas números)</label>
-                        {{-- Campo Contato: RENOMEADO para 'contato_cliente' --}}
-                        <input type="tel" name="contato_cliente" id="client_contact" required
+                        <label for="client_contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Seu WhatsApp (apenas números, com DDD) *
+                        </label>
+                        <input type="tel" name="contato_cliente" id="client_contact"
                             class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror"
-                            value="{{ old('contato_cliente') }}">
-                        {{-- Tag @error: CORRIGIDA para 'contato_cliente' --}}
+                            value="{{ old('contato_cliente') }}"
+                            {{-- REFORÇO CRÍTICO DE ATRIBUTOS HTML --}}
+                            inputmode="numeric"
+                            maxlength="15"
+                            pattern="\d{10,11}"
+                            placeholder="Ex: 91985320997">
                         @error('contato_cliente')
                             <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
                         @else
-                            {{-- Placeholder para Mensagem de Validação do Cliente (Só aparece se não houver erro de backend) --}}
                             <p id="contact-validation-feedback" class="text-xs mt-1 font-semibold transition duration-300"></p>
                         @enderror
                     </div>
 
 
-                    {{-- AÇÃO DOS BOTÕES: Aumentado pt-6 para pt-8, sm:space-x-6 (OK) e py-4 para py-5 --}}
+                    {{-- AÇÃO DOS BOTÕES --}}
                     <div class="flex flex-col sm:flex-row gap-4 justify-end space-y-4 sm:space-y-0 sm:space-x-6 pt-8 border-t dark:border-gray-700">
-                        {{-- Botão Cancelar: Aumentado py-4 para py-5 --}}
+                        {{-- Botão Cancelar --}}
                         <button type="button" id="close-modal" class="order-2 sm:order-1 p-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition">
                             Voltar / Cancelar
                         </button>
-                        {{-- Botão Enviar: Aumentado py-4 para py-5 --}}
-                        <button type="submit" id="submit-booking-button" class="order-1 sm:order-2 p-4 bg-indigo-600 text-white font-extrabold rounded-full hover:bg-indigo-700 transition shadow-xl shadow-indigo-500/50 transform hover:scale-[1.03] active:scale-[0.97]">
+                        {{-- ATENÇÃO: type="button" E SUBMISSÃO MANUAL --}}
+                        <button type="button" id="submit-booking-button" class="order-1 sm:order-2 p-4 bg-indigo-600 text-white font-extrabold rounded-full hover:bg-indigo-700 transition shadow-xl shadow-indigo-500/50 transform hover:scale-[1.03] active:scale-[0.97]">
                             Confirmar Pré-Reserva
                         </button>
                     </div>
@@ -257,7 +282,7 @@
 </div>
 
 
-{{-- Scripts para funcionalidade do modal e máscara (MANTIDOS) --}}
+{{-- Scripts para funcionalidade do modal e máscara (AGORA COM DEBUG PERSISTENTE) --}}
 <script>
 /**
  * Aplica máscara de telefone brasileiro (DDD + 8 ou 9 dígitos) no formato (XX) XXXXX-XXXX.
@@ -265,23 +290,18 @@
  * @returns {string} O valor mascarado.
  */
 function maskWhatsapp(value) {
-    // Remove tudo que não for dígito
     const digits = value.replace(/\D/g, "");
     const maxDigits = 11;
     const limitedDigits = digits.substring(0, maxDigits);
     let result = limitedDigits;
 
-    // (XX) XXXXX-XXXX
     if (limitedDigits.length > 2) {
         result = `(${limitedDigits.substring(0, 2)}) ${limitedDigits.substring(2)}`;
     }
-    // (XX) XXXXX-XXXX (11 digitos) ou (XX) XXXX-XXXX (10 digitos)
     if (limitedDigits.length > 6) {
         if (limitedDigits.length === 11) {
-            // Se for 9 dígitos + 2 de DDD (Ex: 99999-9999)
             result = result.replace(/(\d{5})(\d{4})$/, "$1-$2");
         } else if (limitedDigits.length === 10) {
-            // Se for 8 dígitos + 2 de DDD (Ex: 9999-9999)
             result = result.replace(/(\d{4})(\d{4})$/, "$1-$2");
         }
     }
@@ -296,7 +316,6 @@ function maskWhatsapp(value) {
  */
 function validateContact(value) {
     const digits = value.replace(/\D/g, "");
-    // Considera válido se tiver 10 (DDD + 8 digitos) ou 11 (DDD + 9 digitos)
     return digits.length === 10 || digits.length === 11;
 }
 
@@ -305,7 +324,6 @@ function validateContact(value) {
  */
 function formatarDataBrasileira(dateString) {
     const date = new Date(dateString + 'T00:00:00');
-    // Adicionado tratamento de erro para data inválida
     if (isNaN(date)) {
         return 'Data Inválida';
     }
@@ -316,49 +334,68 @@ function formatarDataBrasileira(dateString) {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    // === DEBUG PERSISTENTE - LOG DE RECUPERAÇÃO ===
+    const debugValue = sessionStorage.getItem('debug_contato_cliente_last_submit');
+    if (debugValue) {
+        console.log('--- DEBUG PERSISTENTE (CRÍTICO) ---');
+        console.log(`Valor de Debug Persistente capturado na recarga: "${debugValue}"`);
+        console.log(`Comprimento do valor capturado: ${debugValue.length} dígitos.`);
+        console.log('Se este valor for 10 ou 11, o erro está na regra de validação do Laravel. Caso contrário, o erro é no preenchimento.');
+        console.log('--- FIM DEBUG PERSISTENTE ---');
+        sessionStorage.removeItem('debug_contato_cliente_last_submit'); // Limpa após logar
+    }
+    // ===============================================
+
     const modal = document.getElementById('booking-modal');
     const modalContent = document.getElementById('modal-content');
     const closeModalButton = document.getElementById('close-modal');
+    const bookingForm = document.getElementById('booking-form');
 
     // Campos do formulário
     const contactInput = document.getElementById('client_contact');
     const nameInput = document.getElementById('client_name');
     const submitButton = document.getElementById('submit-booking-button');
-    // Elemento de feedback customizado (só existe se não houver erro de validação Laravel)
     const feedbackElement = document.getElementById('contact-validation-feedback');
 
     // Funções Blade injetadas (usando tags PHP no JS)
-    // CRÍTICO: Usando para garantir sintaxe JS correta e evitar ParseErrors
     const oldDate = @json(old('data_reserva'));
     const oldStart = @json(old('hora_inicio'));
     const oldEnd = @json(old('hora_fim'));
-    const oldPrice = @json(old('price')); // Valor numérico bruto
+    const oldPrice = @json(old('price'));
     const oldContactValue = @json(old('contato_cliente'));
-    // É crucial capturar o schedule_id antigo também
     const oldScheduleId = @json(old('schedule_id'));
 
     /**
      * Atualiza o estado de validação do input de contato e do botão de envio.
      */
     function updateValidationState() {
-        if (!contactInput || !submitButton) return;
+        if (!contactInput || !nameInput || !submitButton) return;
 
-        const isValid = validateContact(contactInput.value);
-        // Checa se o Laravel retornou erro para 'contato_cliente'
+        const isValidContact = validateContact(contactInput.value);
+        const nameIsFilled = nameInput.value.trim().length > 0;
+
         const hasBackendError = @json($errors->has("contato_cliente"));
+        const hasNameBackendError = @json($errors->has("nome_cliente"));
 
-        const canSubmit = isValid && !hasBackendError;
+        const canSubmit = isValidContact && nameIsFilled && !hasBackendError && !hasNameBackendError;
+
         submitButton.disabled = !canSubmit;
         submitButton.classList.toggle('opacity-50', !canSubmit);
         submitButton.classList.toggle('cursor-not-allowed', !canSubmit);
 
+        // Feedback visual para nome
+        if (nameInput.value.trim().length === 0) {
+            nameInput.classList.add('ring-2', 'ring-yellow-500/50');
+        } else {
+            nameInput.classList.remove('ring-2', 'ring-yellow-500/50');
+        }
 
-        // Atualizar Feedback Visual (apenas se não houver erro de backend)
+        // Atualizar Feedback Visual do Contato
         if (!hasBackendError && feedbackElement) {
             if (contactInput.value.length === 0) {
                 feedbackElement.textContent = 'Aguardando 10 ou 11 dígitos (DDD + número).';
                 feedbackElement.className = 'text-xs mt-1 font-semibold text-gray-500 dark:text-gray-400 transition duration-300';
-            } else if (isValid) {
+            } else if (isValidContact) {
                 feedbackElement.textContent = '✅ WhatsApp OK.';
                 feedbackElement.className = 'text-xs mt-1 font-semibold text-green-600 dark:text-green-400 transition duration-300';
             } else {
@@ -370,18 +407,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     if (contactInput) {
-        // Listener para aplicar máscara e validar em tempo real
         contactInput.addEventListener('input', (e) => {
             e.target.value = maskWhatsapp(e.target.value);
             updateValidationState();
         });
 
-        // Aplica a máscara no valor 'old' se ele existir
         if (oldContactValue) {
             contactInput.value = maskWhatsapp(oldContactValue);
         }
     }
 
+    if (nameInput) {
+        nameInput.addEventListener('input', updateValidationState);
+    }
 
     // Abertura do Modal por clique nos horários
     document.querySelectorAll('.open-modal').forEach(button => {
@@ -389,33 +427,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const date = button.dataset.date;
             const start = button.dataset.start;
             const end = button.dataset.end;
-            // O preço aqui é do dataset (numérico bruto) e formatado para display
             const priceRaw = button.dataset.price;
             const priceDisplay = parseFloat(priceRaw).toFixed(2).replace('.', ',');
             const scheduleId = button.dataset.scheduleId;
 
-            // Popula o Modal com os dados visuais
+            // Popula o Modal
             document.getElementById('modal-date').textContent = formatarDataBrasileira(date);
             document.getElementById('modal-time').textContent = `${start} - ${end}`;
             document.getElementById('modal-price').textContent = priceDisplay;
 
-            // Popula os campos hidden do formulário
+            // Popula os campos hidden
             document.getElementById('form-date').value = date;
             document.getElementById('form-start').value = start;
             document.getElementById('form-end').value = end;
-            document.getElementById('form-price').value = priceRaw; // Crucial: valor bruto para o Controller
+            document.getElementById('form-price').value = priceRaw;
             document.getElementById('form-schedule-id').value = scheduleId;
 
             // Limpa campos de nome/contato (ou usa old se existirem)
-            // Mantém o old() do nome apenas se for string não vazia.
-            if (nameInput) nameInput.value = @json(old('nome_cliente'));
+            if (nameInput) nameInput.value = @json(old('nome_cliente')) || '';
             if (contactInput) contactInput.value = oldContactValue ? maskWhatsapp(oldContactValue) : '';
 
-            // Garante que o modal use a borda azul (padrão) ao ser aberto por clique
             modalContent.classList.remove('border-red-600', 'dark:border-red-500');
             modalContent.classList.add('border-indigo-600', 'dark:border-indigo-500');
 
-            // O estado de validação inicial
             updateValidationState();
 
             modal.classList.remove('hidden');
@@ -425,31 +459,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reabrir Modal se a validação falhou e houver dados antigos
     if (oldDate && oldStart) {
-        // Garante que o preço 'old' seja formatado corretamente para exibição
         const formattedOldPrice = parseFloat(oldPrice).toFixed(2).replace('.', ',');
 
         document.getElementById('modal-date').textContent = formatarDataBrasileira(oldDate);
         document.getElementById('modal-time').textContent = `${oldStart} - ${oldEnd}`;
         document.getElementById('modal-price').textContent = formattedOldPrice;
-        // Popula o campo hidden do schedule_id
         document.getElementById('form-schedule-id').value = oldScheduleId;
 
-        // O estado de validação será atualizado abaixo.
+        updateValidationState();
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     }
 
-    // ATUALIZAÇÃO INICIAL do estado de validação após o DOM e os old() terem sido carregados
+    // Atualização inicial do estado de validação
     if (contactInput) {
         updateValidationState();
     }
+
+    // 🛑 CRÍTICO: NOVO listener 'click' com DEBUG PERSISTENTE E LIMPEZA ULTRA-AGRESSIVA
+    submitButton.addEventListener('click', (event) => {
+        event.preventDefault(); // Garante que a submissão padrão do form não ocorra
+
+        // Re-validação interna (para garantir)
+        const isValidContact = validateContact(contactInput.value);
+        const nameIsFilled = nameInput.value.trim().length > 0;
+
+        if (!isValidContact || !nameIsFilled) {
+             console.error("Tentativa de submissão com dados inválidos/incompletos.");
+             updateValidationState();
+             return;
+        }
+
+        // 1. LIMPEZA E ARMAZENAMENTO PERSISTENTE
+        const maskedValue = contactInput.value;
+
+        // AÇÃO MAIS AGRESSIVA: Limpa espaços em branco (trim) ANTES de remover não-dígitos.
+        const digitsOnly = maskedValue.trim().replace(/\D/g, "");
+
+        // Armazena o valor limpo no sessionStorage ANTES de atribuir ao campo.
+        sessionStorage.setItem('debug_contato_cliente_last_submit', digitsOnly);
+
+        // Atribui apenas os dígitos ao campo ANTES da submissão
+        contactInput.value = digitsOnly;
+
+        // 2. DEBUG CRÍTICO PARA O USUÁRIO (IMEDIATO)
+        console.log('--- SUBMISSÃO MANUAL DO FORMULÁRIO (AGUARDANDO DELAY) ---');
+        console.log('Valor enviado para nome_cliente:', nameInput.value);
+        console.log('Valor **limpo** e enviado para contato_cliente:', digitsOnly);
+        console.log(`(String de ${digitsOnly.length} dígitos salva no sessionStorage.)`);
+        console.log('--- FIM DEBUG IMEDIATO ---');
+
+
+        // 3. SUBMISSÃO MANUAL DO FORMULÁRIO COM DELAY
+        // Usa setTimeout para dar tempo ao console de registrar o log.
+        setTimeout(() => {
+            bookingForm.submit();
+        }, 50); // 50ms de delay
+    });
 
 
     // Fechar Modal
     closeModalButton.addEventListener('click', () => {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        if (contactInput) {
+             // Garante que o valor mascarado seja reintroduzido após fechar
+             contactInput.value = maskWhatsapp(contactInput.value);
+        }
     });
 
     // Fechar Modal clicando fora
@@ -457,6 +534,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === modal) {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+            if (contactInput) {
+                // Garante que o valor mascarado seja reintroduzido após fechar
+                contactInput.value = maskWhatsapp(contactInput.value);
+            }
         }
     });
 });

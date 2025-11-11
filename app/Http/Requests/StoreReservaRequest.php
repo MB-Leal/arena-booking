@@ -24,22 +24,21 @@ class StoreReservaRequest extends FormRequest
         $minDate = Carbon::now()->format('Y-m-d');
 
         return [
-            // Nomes de input SINCRONIZADOS com create.blade.php
-
             // Campos do Cliente
             'nome_cliente'      => ['required', 'string', 'max:255'],
-            'contato_cliente'   => ['required', 'string', 'max:50'],
+
+            // ✅ CORREÇÃO CRÍTICA: Aplica regex para aceitar apenas 10 ou 11 dígitos numéricos.
+            'contato_cliente'   => ['required', 'string', 'regex:/^\d{10,11}$/'],
 
             // Campos de Horário
-            // Agora usa 'data_reserva'
             'data_reserva'      => ['required', 'date', "after_or_equal:{$minDate}"],
-            // Agora usa 'hora_inicio'
             'hora_inicio'       => ['required', 'date_format:H:i'],
-            // Agora usa 'hora_fim'
             'hora_fim'          => ['required', 'date_format:H:i', 'after:hora_inicio'],
 
-            // O campo 'price' foi removido da validação, pois não está no formulário.
-            // Se ele for um campo obrigatório no seu Controller, certifique-se de adicioná-lo ao Blade.
+            // Campos Hidden (usados para passar dados de volta)
+            'price'             => ['required', 'numeric', 'min:0'],
+            'schedule_id'       => ['required', 'integer', 'exists:schedules,id'],
+            'is_fixed'          => ['sometimes', 'boolean'],
         ];
     }
 
@@ -57,7 +56,14 @@ class StoreReservaRequest extends FormRequest
             'hora_fim.after' => 'O horário de término deve ser após o horário de início.',
 
             'nome_cliente.required' => 'O nome completo do cliente é obrigatório.',
-            'contato_cliente.required' => 'O contato (telefone ou e-mail) é obrigatório.',
+            'contato_cliente.required' => 'O contato (WhatsApp) é obrigatório.',
+
+            // ✅ MENSAGEM CRÍTICA PARA A CORREÇÃO:
+            'contato_cliente.regex' => 'O WhatsApp deve conter 10 ou 11 dígitos (apenas números, incluindo o DDD).',
+
+            // Mensagens para campos hidden, se estiverem faltando
+            'price.required' => 'O valor da reserva não foi selecionado.',
+            'schedule_id.required' => 'O horário selecionado é inválido.',
         ];
     }
 }

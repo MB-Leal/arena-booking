@@ -29,6 +29,21 @@
                 </div>
             @endif
 
+            {{-- Aviso de sucesso/warning de múltiplas reservas --}}
+            @if (session('success'))
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6 shadow-md" role="alert">
+                    <span class="font-semibold">Sucesso:</span>
+                    <span class="block sm:inline ml-2">{{ session('success') }}</span>
+                </div>
+            @endif
+            @if (session('warning'))
+                <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-6 shadow-md" role="alert">
+                     <span class="font-semibold">Aviso:</span>
+                    <span class="block sm:inline ml-2">{{ session('warning') }}</span>
+                </div>
+            @endif
+
+
             @if ($errors->any())
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 shadow-md">
                     <p class="font-bold mb-2">Por favor, corrija os seguintes erros:</p>
@@ -99,7 +114,7 @@
 
 
                 <div id="reservation-details-container" class="space-y-4 p-4 border border-green-300 rounded-lg bg-green-50" style="display: none;">
-                    <h4 class="text-xl font-bold text-green-700 border-b pb-2">Detalhes da Reserva</h4>
+                    <h4 class="text-xl font-bold text-green-700 border-b pb-2">4. Detalhes da Reserva</h4>
 
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-green-800">Horário Selecionado:</label>
@@ -119,6 +134,27 @@
                         <textarea id="notes" name="notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="Detalhes adicionais sobre a reserva (máx. 500 caracteres)">{{ old('notes') }}</textarea>
                     </div>
 
+                    {{-- =================================================================== --}}
+                    {{-- [INÍCIO] - NOVO BLOCO "DEIXAR FIXO" --}}
+                    {{-- =================================================================== --}}
+                    <div class="block pt-4 mt-4 border-t border-green-200">
+                        <label for="is_fixed" class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" id="is_fixed" name="is_fixed" value="1"
+                                   class="h-5 w-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                   {{ old('is_fixed') ? 'checked' : '' }}>
+                            <div class="flex flex-col">
+                                <span class="text-sm text-gray-800 font-semibold">Deixar fixo (Repetir semanalmente por 1 ano)</span>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    O sistema tentará agendar este mesmo dia da semana e horário (<strong><span id="fixed-time-display">--:--</span></strong>) pelas próximas 52 semanas.
+                                    Horários que já estiverem ocupados serão pulados.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                    {{-- =================================================================== --}}
+                    {{-- [FIM] - NOVO BLOCO "DEIXAR FIXO" --}}
+                    {{-- =================================================================== --}}
+
                 </div>
 
                 <div class="flex items-center justify-between pt-4">
@@ -136,6 +172,7 @@
     </div>
 </div>
 
+{{-- O SCRIPT É QUASE IDÊNTICO, APENAS UMA LINHA ADICIONADA --}}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Elementos DOM
@@ -341,6 +378,11 @@
             reservationDetailsContainer.style.display = 'block';
             submitButton.disabled = false;
 
+            // ===================================================================
+            // [NOVA LINHA] Atualiza o texto de ajuda do "Deixar Fixo"
+            // ===================================================================
+            document.getElementById('fixed-time-display').textContent = slot.time_slot;
+
             // Opcional: Rolagem suave até o botão de submissão
             submitButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -359,6 +401,5 @@
         }
     });
 </script>
-
 
 </x-app-layout>

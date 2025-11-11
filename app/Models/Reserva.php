@@ -17,11 +17,11 @@ class Reserva extends Model
     public const STATUS_CONFIRMADA = 'confirmed';
     public const STATUS_CANCELADA = 'cancelled';
     public const STATUS_REJEITADA = 'rejected';
-    public const STATUS_EXPIRADA = 'expired'; // Se o tempo de pré-reserva acabar
+    public const STATUS_EXPIRADA = 'expired';
 
     /**
      * Os atributos que são mass assignable.
-     * Inclui campos de cliente, agendamento e gestão.
+     * ATUALIZADO: Incluindo os campos de recorrência.
      */
     protected $fillable = [
         'user_id',
@@ -34,19 +34,22 @@ class Reserva extends Model
         'client_contact',
         'notes',
         'status',
-        'manager_id',           // ID do gestor que criou/confirmou
-        'is_fixed',             // Se é uma reserva fixa recorrente (CRÍTICO: Faltava na sua versão)
-        'day_of_week',          // Dia da semana para reservas fixas (CRÍTICO: Faltava na sua versão)
-        'recurrent_series_id',  // ID da série recorrente (se for fixa)
-        'week_index',           // Índice dentro da série (se for fixa)
+        'manager_id',          // ID do gestor que criou/confirmou
+
+        // --- Campos para Recorrência ---
+        'is_fixed',            // Se é uma reserva fixa recorrente
+        'day_of_week',         // Dia da semana para reservas fixas (0=Dom, 1=Seg, ...)
+        'recurrent_series_id', // ID para agrupar a série recorrente
+        'week_index',          // Índice dentro da série (0 a 51)
     ];
 
     /**
      * Os atributos que devem ser convertidos (casted) para tipos nativos.
+     * ATUALIZADO: Incluindo is_fixed.
      */
     protected $casts = [
-        'date' => 'date',       // CORRIGIDO: Deve ser 'date' para manipular o Carbon
-        'is_fixed' => 'boolean', // CRÍTICO: Conversão para booleano
+        'date' => 'date',
+        'is_fixed' => 'boolean', // Conversão para booleano
     ];
 
 
@@ -59,7 +62,6 @@ class Reserva extends Model
      */
     public function user(): BelongsTo
     {
-        // Assume que o modelo User é App\Models\User
         return $this->belongsTo(User::class, 'user_id');
     }
 
@@ -68,7 +70,6 @@ class Reserva extends Model
      */
     public function manager(): BelongsTo
     {
-        // Usamos o modelo User para referenciar o gestor
         return $this->belongsTo(User::class, 'manager_id');
     }
 

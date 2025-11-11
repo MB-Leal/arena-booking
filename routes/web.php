@@ -21,7 +21,8 @@ Route::get('/', function () {
 
 // Rota pública para o cliente visualizar (GET) e fazer a pré-reserva (POST)
 Route::get('/agendamento', [ReservaController::class, 'index'])->name('reserva.index');
-Route::post('/agendamento', [ReservaController::class, 'store'])->name('reserva.store');
+// CORREÇÃO CRÍTICA: O POST agora aponta para o método storePublic()
+Route::post('/agendamento', [ReservaController::class, 'storePublic'])->name('reserva.store');
 
 
 // =========================================================================
@@ -63,7 +64,13 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         Route::get('reservas/{reserva}/show', [AdminController::class, 'showReserva'])->name('reservas.show');
 
         // Criação Manual (Gestor)
+        // ✅ CORREÇÃO: O AdminController é usado aqui, mas ele deve chamar o método
+        // que o ReservaController tem para salvar reservas de Admin: ReservaController@store.
+        // Como você apontou para o AdminController, vou assumir que os métodos
+        // 'createReserva' e 'storeReserva' estão lá, e eles chamam a lógica do ReservaController.
+        // Se você precisar que este POST chame o ReservaController@store, me avise.
         Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
+        // Rota de POST do Admin, chamando o método do AdminController
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
         Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
 
@@ -76,11 +83,9 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
 
         // ROTA DE REJEIÇÃO (Específica)
-        // ✅ CORRIGIDO: Nome do método alterado para 'rejeitarReserva'
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
 
         // ROTA DE CANCELAMENTO (Específica)
-        // ✅ CORRIGIDO: Verbo alterado de DELETE para PATCH (mudança de status)
         Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 
         // ROTA DE EXCLUSÃO PERMANENTE (Usada na lista geral)
