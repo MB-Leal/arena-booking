@@ -58,7 +58,10 @@ class AdminController extends Controller
             ];
         }
         $eventsJson = json_encode($events);
+
+        // >>> ESTA LINHA CALCULA A CONTAGEM DE PENDÊNCIAS <<<
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
+
         return view('dashboard', compact('eventsJson', 'reservasPendentesCount'));
     }
 
@@ -87,7 +90,6 @@ class AdminController extends Controller
         if ($isFixed) {
             // Se estamos checando uma reserva FIXA (Fixo vs Fixo):
             // Checamos apenas contra OUTRAS fixas no mesmo dia da semana e horário.
-            // (Isso é para evitar a criação de séries fixas sobrepostas, ignorando a data para o conflito recorrente)
             $queryFixoVsFixo = (clone $baseQuery)
                 ->where('is_fixed', true)
                 ->where('day_of_week', $dayOfWeek);
@@ -104,9 +106,6 @@ class AdminController extends Controller
             // Se estamos checando uma reserva PONTUAL (Pontual vs Tudo):
             // Checamos contra QUALQUER reserva (fixa ou pontual) que esteja CONFIRMADA/PENDENTE
             // NA DATA ESPECÍFICA.
-            // Esta é a correção: Ao buscar linhas fixas (is_fixed=true), o filtro pela 'date'
-            // garante que só olhamos para aquela ocorrência da série, e o 'baseQuery'
-            // ignora automaticamente se a ocorrência estiver 'cancelled'.
             $queryVsTudoNaData = (clone $baseQuery)
                 ->where('date', $date);
 
@@ -133,21 +132,39 @@ class AdminController extends Controller
         return view('admin.reservas.index', compact('reservas', 'pageTitle'));
     }
 
+    /**
+     * Exibe o índice de reservas confirmadas, ordenadas por data crescente.
+     */
     public function confirmed_index(Request $request)
     {
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
+                            ->where(function($q) {
+                                // Filtra reservas que ainda não passaram
+                                // Consideramos que a reserva passou se a data for anterior a hoje.
+                                $q->whereDate('date', '>=', Carbon::today()->toDateString());
+
+                                // Opcional: Para horários de hoje, você pode refinar para checar se a hora de fim já passou,
+                                // mas o filtro acima já é suficiente para a maioria dos casos.
+                                // Se quiser ser muito preciso:
+                                // ->orWhere(fn($q) => $q->whereDate('date', Carbon::today()->toDateString())->where('end_time', '>', Carbon::now()->format('H:i:s')))
+                            })
                             ->with('user');
+
         $isOnlyMine = $request->get('only_mine') === 'true';
+
         if ($isOnlyMine) {
             $pageTitle = 'Minhas Reservas Manuais Confirmadas';
-            // Filtra por reservas criadas/confirmadas pelo gestor logado
+            // Filtra por reservas criadas/confirmadas pelo gestor logado:
             $query->where('manager_id', Auth::id());
         } else {
-            $pageTitle = 'Todas as Reservas Confirmadas';
+            $pageTitle = 'Todas as Reservas Confirmadas (Próximos Agendamentos)';
         }
+
+        // CORREÇÃO APLICADA NA ÚLTIMA RESPOSTA: Ordenar por data crescente (ASC) e hora crescente (ASC)
         $reservas = $query->orderBy('date', 'asc')
                             ->orderBy('start_time', 'asc')
                             ->paginate(15);
+
         return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine'));
     }
 

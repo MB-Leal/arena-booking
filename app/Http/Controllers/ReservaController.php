@@ -142,9 +142,9 @@ class ReservaController extends Controller
         // PASSO 1: Ocupações por Reservas Fixas ATIVAS (Anulam a recorrência do Schedule)
         // ====================================================================
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                     ->select('day_of_week', 'start_time', 'end_time')
-                                     ->get();
+                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                           ->select('day_of_week', 'start_time', 'end_time')
+                                           ->get();
 
         // Mapeia os slots fixos reservados para fácil exclusão (chave: 'day_of_week-start_time-end_time')
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
@@ -157,11 +157,11 @@ class ReservaController extends Controller
         // Busca reservas fixas que foram CANCELADAS no período para REABRIR O SLOT PONTUALMENTE.
         // ====================================================================
         $canceledFixedReservas = Reserva::where('is_fixed', true)
-                                         ->where('status', Reserva::STATUS_CANCELADA)
-                                         ->whereDate('date', '>=', $startDate->toDateString())
-                                         ->whereDate('date', '<=', $endDate->toDateString())
-                                         ->select('date', 'start_time', 'end_time', 'price', 'schedule_id')
-                                         ->get();
+                                           ->where('status', Reserva::STATUS_CANCELADA)
+                                           ->whereDate('date', '>=', $startDate->toDateString())
+                                           ->whereDate('date', '<=', $endDate->toDateString())
+                                           ->select('date', 'start_time', 'end_time', 'price', 'schedule_id')
+                                           ->get();
 
         // Mapeia as exceções de cancelamento (chave: 'Y-m-d H:i')
         $canceledFixedMap = $canceledFixedReservas->mapWithKeys(function ($reserva) {
@@ -180,11 +180,11 @@ class ReservaController extends Controller
 
         // 2. HORÁRIOS RECORRENTES FIXOS (Disponibilidade do Admin)
         $recurringSchedules = Schedule::whereNotNull('day_of_week')
-                                         ->whereNull('date')
-                                         ->where('is_active', true)
-                                         ->orderBy('day_of_week')
-                                         ->orderBy('start_time')
-                                         ->get();
+                                             ->whereNull('date')
+                                             ->where('is_active', true)
+                                             ->orderBy('day_of_week')
+                                             ->orderBy('start_time')
+                                             ->get();
 
         // ====================================================================
         // PASSO 2.5: FILTRA SLOTS RECORRENTES ANULADOS POR RESERVAS FIXAS ATIVAS
@@ -200,11 +200,11 @@ class ReservaController extends Controller
 
         // 3. HORÁRIOS AVULSOS: Onde date é definido e está dentro do período.
         $adHocSchedules = Schedule::whereNotNull('date')
-                                     ->where('is_active', true)
-                                     ->whereDate('date', '>=', $startDate->toDateString())
-                                     ->whereDate('date', '<=', $endDate->toDateString())
-                                     ->orderBy('start_time')
-                                     ->get();
+                                           ->where('is_active', true)
+                                           ->whereDate('date', '>=', $startDate->toDateString())
+                                           ->whereDate('date', '<=', $endDate->toDateString())
+                                           ->orderBy('start_time')
+                                           ->get();
 
         // === RETORNA AGENDA VAZIA SE NÃO HOVER REGISTROS ===
         if ($recurringSchedules->isEmpty() && $adHocSchedules->isEmpty() && empty($canceledFixedMap)) {
@@ -218,9 +218,9 @@ class ReservaController extends Controller
         // Busca todas as reservas ativas dentro do período para o filtro final.
         // ====================================================================
         $allActiveReservations = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                         ->whereDate('date', '>=', $startDate->toDateString())
-                                         ->whereDate('date', '<=', $endDate->toDateString())
-                                         ->get();
+                                           ->whereDate('date', '>=', $startDate->toDateString())
+                                           ->whereDate('date', '<=', $endDate->toDateString())
+                                           ->get();
 
         // Mapeia os slots ocupados (chave: 'Y-m-d H:i')
         $occupiedMap = $allActiveReservations->mapWithKeys(function ($reserva) {
@@ -338,9 +338,9 @@ class ReservaController extends Controller
 
         // a) Busca todos os slots de reserva fixos e ativos (chave de exclusão)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                     ->select('day_of_week', 'start_time', 'end_time')
-                                     ->get();
+                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                           ->select('day_of_week', 'start_time', 'end_time')
+                                           ->get();
 
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
@@ -348,14 +348,14 @@ class ReservaController extends Controller
 
         // b) Busca schedules recorrentes e remove os slots ocupados por reservas fixas
         $availableRecurringSchedules = Schedule::whereNotNull('day_of_week')
-                                                 ->whereNull('date')
-                                                 ->where('is_active', true)
-                                                 ->get()
-                                                 ->filter(function ($schedule) use ($fixedReservaMap) {
-                                                     // Remove slots de Schedule que são anulados por Reservas Fixas
-                                                     $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                                     return !in_array($scheduleKey, $fixedReservaMap);
-                                                 });
+                                                    ->whereNull('date')
+                                                    ->where('is_active', true)
+                                                    ->get()
+                                                    ->filter(function ($schedule) use ($fixedReservaMap) {
+                                                        // Remove slots de Schedule que são anulados por Reservas Fixas
+                                                        $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                        return !in_array($scheduleKey, $fixedReservaMap);
+                                                    });
 
         // c) Extrai os dias da semana (dayOfWeek: 0 a 6) que têm pelo menos 1 slot recorrente disponível
         $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
@@ -377,13 +377,13 @@ class ReservaController extends Controller
         // 2.5. TRATA CANCELAMENTOS FIXOS: Adiciona as datas de cancelamento fixo como disponibilidade
         // Isso garante que o seletor de data mostre um dia que estava bloqueado.
         $canceledFixedDates = Reserva::where('is_fixed', true)
-                                     ->where('status', Reserva::STATUS_CANCELADA)
-                                     ->whereDate('date', '>=', $hoje->toDateString())
-                                     ->whereDate('date', '<=', $hoje->copy()->addDays($diasParaVerificar)->toDateString())
-                                     ->pluck('date')
-                                     ->unique()
-                                     ->map(fn($date) => $date->toDateString())
-                                     ->toArray();
+                                           ->where('status', Reserva::STATUS_CANCELADA)
+                                           ->whereDate('date', '>=', $hoje->toDateString())
+                                           ->whereDate('date', '<=', $hoje->copy()->addDays($diasParaVerificar)->toDateString())
+                                           ->pluck('date')
+                                           ->unique()
+                                           ->map(fn($date) => $date->toDateString())
+                                           ->toArray();
 
 
         // 3. COMBINAÇÃO E PROJEÇÃO NO TEMPO
@@ -573,15 +573,51 @@ class ReservaController extends Controller
         // 5. Combina os dois arrays e remove duplicatas (se houver um slot de cancelamento e um slot avulso idêntico)
         // E ordena pelo horário
         $finalAvailableTimes = collect(array_merge($combinedAvailableSlots, $availableScheduleTimes))
-                                         ->unique(function ($item) {
-                                              return $item['start_time'] . '-' . $item['end_time'];
-                                         })
-                                         ->sortBy('start_time')
-                                         ->values();
+                                            ->unique(function ($item) {
+                                                 return $item['start_time'] . '-' . $item['end_time'];
+                                            })
+                                            ->sortBy('start_time')
+                                            ->values();
 
         // 6. Retorna apenas o array de slots
         return response()->json($finalAvailableTimes);
     }
+
+
+    // =========================================================================
+    // MÉTODO `countPending` (CORRIGIDO com Checagem de Data e Hora)
+    // =========================================================================
+    /**
+     * Retorna a contagem de reservas com status 'pendente' (hoje ou no futuro E AINDA NÃO EXPIRADAS).
+     */
+    public function countPending()
+    {
+        $now = Carbon::now();
+        $todayString = $now->toDateString();
+        $nowTime = $now->format('H:i:s');
+
+        // A contagem deve incluir:
+        // 1. Reservas cuja data é FUTURA (> hoje).
+        // 2. Reservas cuja data é HOJE E o horário de FIM ainda não passou (end_time > now()).
+        $futureOrTodayCount = Reserva::where('status', Reserva::STATUS_PENDENTE)
+            ->whereDate('date', '>=', $todayString) // Começa filtrando apenas por hoje e futuro
+            ->where(function ($query) use ($todayString, $nowTime) {
+                // Filtro 1: Datas futuras (sempre contam)
+                $query->whereDate('date', '>', $todayString)
+                      // Filtro 2: OU se a data é hoje, a hora de fim deve ser futura
+                      ->orWhere(function ($q) use ($todayString, $nowTime) {
+                          $q->whereDate('date', $todayString)
+                            ->where('end_time', '>', $nowTime);
+                      });
+            })
+            ->count();
+
+        // Retorna apenas a contagem limpa
+        return response()->json([
+            'count' => $futureOrTodayCount,
+        ]);
+    }
+    // =========================================================================
 
 
     // =========================================================================
@@ -815,7 +851,7 @@ class ReservaController extends Controller
             $cleanedPrice = str_replace(',', '.', $cleanedPrice);
 
             // 3. Garante que o valor limpo seja mesclado de volta na requisição
-            $request->merge(['price' => $cleanedPrice]);
+            //$request->merge(['price' => $cleanedPrice]);
         }
         // **********************************************************************************************
 
@@ -967,7 +1003,7 @@ class ReservaController extends Controller
 
             // 3. Atualiza o manager_id se estivermos confirmando/alterando status de algo que era Pendente (cliente)
             if ($reserva->manager_id === null && in_array($newStatus, [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])) {
-                   $reserva->manager_id = Auth::id();
+                        $reserva->manager_id = Auth::id();
             }
 
 

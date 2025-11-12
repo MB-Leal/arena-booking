@@ -21,45 +21,45 @@
 
                      <!-- 4. Gerenciar Horário (Rota Correta: admin.horarios.index) -->
                     <x-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="
-                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
-                        hover:bg-orange-50 hover:text-orange-700
-                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
                         {{ __('Gerenciar Horários') }}
                     </x-nav-link>
 
                      <!-- 5. Agendar Reserva Manual (Rota Correta: admin.reservas.create) -->
                     <x-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="
-                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
-                        hover:bg-orange-50 hover:text-orange-700
-                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
                         {{ __('Agendar') }}
                     </x-nav-link>
 
                       <!-- 3. Reservas Confirmadas (Rota Correta: admin.reservas.confirmed_index) -->
                     <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
-                       px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
-                        hover:bg-orange-50 hover:text-orange-700
-                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                       px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
                         {{ __('Reservas Confirmadas') }}
                     </x-nav-link>
 
                     <!-- 2. Ver Reservas Pendentes (Rota Correta: admin.reservas.index) -->
                     <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
-                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
-                        hover:bg-orange-50 hover:text-orange-700
-                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
                         {{ __('Reservas Pendentes WEB') }}
                     </x-nav-link>
 
                     <!-- 6. Novo Usuário (Rota Correta: admin.users.create) -->
                     <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
-                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
-                        hover:bg-orange-50 hover:text-orange-700
-                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
                         {{ __('Novo Usuário') }}
                     </x-nav-link>
@@ -120,24 +120,24 @@
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="border-l-4 border-orange-500 text-orange-600">
+            <x-responsive-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Gerenciar Horário') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="border-l-4 border-blue-500 text-blue-600">
+            <x-responsive-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Agendar') }}
             </x-responsive-nav-link>
 
-             <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-green-500 text-green-600">
+             <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Reservas Confirmadas') }}
             </x-responsive-nav-link>
 
             <!-- NEW: Admin Links for Mobile/Responsive View (URLs Corrigidas) -->
-            <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-red-500 text-red-600">
+            <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Reservas Pendentes') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-indigo-500 text-indigo-600">
+            <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Novo Usuário') }}
             </x-responsive-nav-link>
         </div>

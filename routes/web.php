@@ -40,6 +40,11 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
     // 🎯 1. DASHBOARD: Rota principal do painel
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
+    // ✅ NOVA ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
+    // Rota protegida pelo middleware 'gestor', usada pelo JS no dashboard para checagem em tempo real.
+    Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])
+        ->name('api.reservas.pendentes'); // O nome de rota original, caso você precise do helper route()
+
     // ===============================================
     // 🛡️ GRUPO DE ROTAS DE ADMINISTRAÇÃO COM PREFIXO
     // ===============================================
@@ -64,11 +69,6 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         Route::get('reservas/{reserva}/show', [AdminController::class, 'showReserva'])->name('reservas.show');
 
         // Criação Manual (Gestor)
-        // ✅ CORREÇÃO: O AdminController é usado aqui, mas ele deve chamar o método
-        // que o ReservaController tem para salvar reservas de Admin: ReservaController@store.
-        // Como você apontou para o AdminController, vou assumir que os métodos
-        // 'createReserva' e 'storeReserva' estão lá, e eles chamam a lógica do ReservaController.
-        // Se você precisar que este POST chame o ReservaController@store, me avise.
         Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
         // Rota de POST do Admin, chamando o método do AdminController
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
