@@ -145,7 +145,7 @@ class AdminController extends Controller
         } else {
             $pageTitle = 'Todas as Reservas Confirmadas';
         }
-        $reservas = $query->orderBy('date', 'desc')
+        $reservas = $query->orderBy('date', 'asc')
                             ->orderBy('start_time', 'asc')
                             ->paginate(15);
         return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine'));
