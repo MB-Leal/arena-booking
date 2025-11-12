@@ -36,7 +36,6 @@
 
         @if (session('success'))
             <div class="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-600 text-green-800 dark:text-green-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg" role="alert">
-                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
                 <span class="font-bold text-lg">SUCESSO!</span> <span class="ml-2">{{ session('success') }}</span>
             </div>
         @endif
@@ -81,8 +80,7 @@
                     Sua vaga foi reservada por 30 minutos. **Clique abaixo imediatamente** para confirmar o pagamento do sinal via WhatsApp.
                 </p>
                 <a href="{{ session('whatsapp_link') }}" target="_blank"
-                    class="mt-2 inline-flex items-center px-12 py-5 bg-green-600 text-white font-extrabold rounded-full shadow-2xl shadow-green-600/50 hover:bg-green-700 transition duration-300 transform hover:scale-105 active:scale-[0.98] uppercase tracking-wider text-xl">
-                    <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.432 2.156A9.957 9.957 0 0010 0C4.477 0 0 4.477 0 10c0 1.956.685 3.766 1.83 5.216l-1.636 4.757a.75.75 0 00.974.974l4.757-1.636A9.957 9.097 0 0010 20c5.523 0 10-4.477 10-10 0-3.328-1.626-6.297-4.17-8.156zM8 14H6V8h2v6zm4 0h-2V8h2v6zm4 0h-2V8h2v6z"></path></svg>
+                    class="mt-2 inline-flex items-center p-4 px-12 py-5 bg-green-600 text-white font-extrabold rounded-full shadow-2xl shadow-green-600/50 hover:bg-green-700 transition duration-300 transform hover:scale-105 active:scale-[0.98] uppercase tracking-wider text-xl">
                     ENVIAR COMPROVANTE VIA WHATSAPP
                 </a>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 italic">O horário será liberado se o comprovante não for enviado.</p>
