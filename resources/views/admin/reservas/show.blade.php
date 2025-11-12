@@ -104,7 +104,7 @@
             <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg p-6">
                 <h4 class="text-xl font-bold mb-4 border-b pb-2">Ações de Gestão</h4>
 
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-wrap gap-4">
                     {{-- 1. Formulário de Confirmação --}}
                     @if($reserva->status != \App\Models\Reserva::STATUS_CONFIRMADA)
                         <form action="{{ route('admin.reservas.updateStatus', $reserva) }}" method="POST">
