@@ -134,6 +134,13 @@
                     <input type="text" name="client_contact" id="client_contact" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
+                {{-- 🚀 NOVO CAMPO: OBSERVAÇÕES (TEXTAREA) --}}
+                <div class="mb-4">
+                    <label for="notes" class="block text-sm font-medium text-gray-700">Observações (Opcional)</label>
+                    <textarea name="notes" id="notes" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+                {{-- FIM DO NOVO CAMPO --}}
+
                 <button type="submit" id="submit-quick-booking" class="mt-4 w-full px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition duration-150">
                     Confirmar Agendamento
                 </button>
@@ -307,6 +314,8 @@
                         document.getElementById('quick-start-time').value = startTimeInput;
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = numericPrice;
+                        // 🚨 Limpa o campo de notas a cada abertura
+                        document.getElementById('notes').value = '';
 
                         // 2. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `

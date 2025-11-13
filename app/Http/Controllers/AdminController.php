@@ -24,7 +24,6 @@ class AdminController extends Controller
 {
     /**
      * Exibe o dashboard principal do gestor.
-     * 🚨 CORRIGIDO: Remove a lógica de eventos, que agora é feita via API.
      */
     public function dashboard()
     {
@@ -33,7 +32,7 @@ class AdminController extends Controller
         // >>> ESTA LINHA CALCULA A CONTAGEM DE PENDÊNCIAS <<<
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
-        // 🚨 O método retorna APENAS a contagem de pendências. O calendário carrega os eventos via API.
+        // O método retorna APENAS a contagem de pendências. O calendário carrega os eventos via API.
         return view('dashboard', compact('reservasPendentesCount'));
     }
 
@@ -93,8 +92,7 @@ class AdminController extends Controller
     // =========================================================================
 
     // =========================================================================
-    // 🚀 NOVO MÉTODO API: Agendamento Rápido via Calendário
-    // (Localizado após as APIs do calendário e antes dos métodos de CRUD)
+    // 🚀 MÉTODO API: Agendamento Rápido via Calendário
     // =========================================================================
     /**
      * Armazena uma reserva de cliente criada manualmente via API de Agendamento Rápido.
@@ -102,7 +100,7 @@ class AdminController extends Controller
      */
     public function storeQuickReservaApi(Request $request)
     {
-        // 1. Validação (Valores básicos do cliente e do slot)
+        // 1. Validação (Incluindo o novo campo 'notes')
         $validated = $request->validate([
             'client_name' => ['required', 'string', 'max:255'],
             'client_contact' => ['required', 'string', 'max:255'],
@@ -111,6 +109,7 @@ class AdminController extends Controller
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
             'price' => ['required', 'numeric', 'min:0.01'],
+            'notes' => ['nullable', 'string', 'max:500'], // ✅ NOVO: Campo de Observações
         ]);
 
         $date = $validated['date'];
@@ -118,17 +117,13 @@ class AdminController extends Controller
         $endTime = $validated['end_time'];
 
         // Constrói o DATETIME completo para os campos 'start_time' e 'end_time' da Reserva.
-        // Isso é crucial para a lógica de sobreposição e para consistência dos dados.
         $startDatetime = Carbon::parse($date . ' ' . $startTime);
         $endDatetime = Carbon::parse($date . ' ' . $endTime);
 
-        // 2. Checagem de Conflito (Garantia de que o slot não foi reservado no meio tempo)
-        // Checa conflito contra QUALQUER reserva (fixa ou pontual) confirmada/pendente na data
+        // 2. Checagem de Conflito
         $conflictReserva = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
              ->where(function ($query) use ($startDatetime, $endDatetime) {
                  // Verifica sobreposição de períodos de tempo (datetimes)
-                 // Se o novo horário (start) é antes do fim de um existente, E
-                 // o novo horário (end) é depois do início de um existente, HÁ CONFLITO.
                  $query->where('start_time', '<', $endDatetime->toDateTimeString())
                        ->where('end_time', '>', $startDatetime->toDateTimeString());
              })
@@ -153,14 +148,14 @@ class AdminController extends Controller
                 'price' => $validated['price'],
                 'client_name' => $validated['client_name'],
                 'client_contact' => $validated['client_contact'],
-                'notes' => 'Agendamento Rápido via Gestor',
+                'notes' => $validated['notes'] ?? 'Agendamento Rápido via Gestor', // ✅ NOVO: Salva o notes, usando um padrão se nulo
                 'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false,
                 'day_of_week' => $startDatetime->dayOfWeek,
                 'manager_id' => Auth::id(), // Registra o gestor que criou
             ]);
 
-            // 🚨 CORREÇÃO: Usar um retorno de resposta mais explícito para evitar corrupção JSON
+            // Retorno de resposta explícito para evitar corrupção JSON
             $responseArray = [
                 'success' => true,
                 'message' => 'Reserva rápida criada e confirmada com sucesso! O calendário será atualizado.',
