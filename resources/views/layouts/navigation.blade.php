@@ -19,15 +19,6 @@
                         {{ __('Home') }}
                     </x-nav-link>
 
-                     <!-- 4. Gerenciar Horário (Rota Correta: admin.horarios.index) -->
-                    <x-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="
-                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Gerenciar Horários') }}
-                    </x-nav-link>
-
                      <!-- 5. Agendar Reserva Manual (Rota Correta: admin.reservas.create) -->
                     <x-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="
                         px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
@@ -118,10 +109,6 @@
             <!-- Dashboard (Existing) -->
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Gerenciar Horário') }}
             </x-responsive-nav-link>
 
             <x-responsive-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="border-l-4 border-gray-500 text-gray-600">

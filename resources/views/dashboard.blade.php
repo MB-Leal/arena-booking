@@ -73,6 +73,13 @@
                     </div>
                 @endif
 
+                @if (session('warning'))
+                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded" role="alert">
+                        <p>{{ session('warning') }}</p>
+                    </div>
+                @endif
+
+
                 {{-- PLACEHOLDER DINÂMICO PARA NOTIFICAÇÕES --}}
                 <div id="realtime-notification">
                     </div>
@@ -97,6 +104,7 @@
         </div>
     </div>
 
+    {{-- Modal de Detalhes de Reserva (RESERVAS EXISTENTES) --}}
     <div id="event-modal" class="modal-overlay hidden" onclick="document.getElementById('event-modal').classList.add('hidden')">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2">Detalhes da Reserva</h3>
@@ -108,10 +116,12 @@
         </div>
     </div>
 
+    {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) --}}
     <div id="quick-booking-modal" class="modal-overlay hidden" onclick="document.getElementById('quick-booking-modal').classList.add('hidden')">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Slot</h3>
 
+            {{-- A URL de submissão é definida no JavaScript, dependendo se é Recorrente ou Pontual --}}
             <form id="quick-booking-form" action="{{ route('api.reservas.store_quick') }}" method="POST">
                 @csrf
 
@@ -122,7 +132,11 @@
                 <input type="hidden" name="date" id="quick-date">
                 <input type="hidden" name="start_time" id="quick-start-time">
                 <input type="hidden" name="end_time" id="quick-end-time">
+
                 <input type="hidden" name="price" id="quick-price">
+
+                {{-- Campo para o ID da reserva fixa que será convertida --}}
+                <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
 
                 <div class="mb-4">
                     <label for="client_name" class="block text-sm font-medium text-gray-700">Nome do Cliente *</label>
@@ -134,12 +148,25 @@
                     <input type="text" name="client_contact" id="client_contact" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                {{-- 🚀 NOVO CAMPO: OBSERVAÇÕES (TEXTAREA) --}}
+                {{-- ✅ CHECKBOX PARA RECORRÊNCIA --}}
+                <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
+                               class="h-5 w-5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-500">
+                        <label for="is-recurrent" class="ml-3 text-base font-semibold text-indigo-700">
+                            Tornar esta reserva Recorrente (Anual)
+                        </label>
+                    </div>
+                    <p class="text-xs text-indigo-600 mt-1 pl-8">
+                        Ao marcar, todos os slots futuros desta faixa de horário serão reservados para este cliente.
+                    </p>
+                </div>
+                {{-- FIM DO NOVO CHECKBOX --}}
+
                 <div class="mb-4">
                     <label for="notes" class="block text-sm font-medium text-gray-700">Observações (Opcional)</label>
                     <textarea name="notes" id="notes" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                 </div>
-                {{-- FIM DO NOVO CAMPO --}}
 
                 <button type="submit" id="submit-quick-booking" class="mt-4 w-full px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition duration-150">
                     Confirmar Agendamento
@@ -154,6 +181,8 @@
 
     <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js'></script>
     <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/locale/pt-br.min.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+
 
     <script>
         // === CONFIGURAÇÕES E ROTAS ===
@@ -161,6 +190,10 @@
         const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}'; // Rota para detalhes/gerenciamento
+
+        // ROTAS DE SUBMISSÃO
+        const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
+        const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
         // ======================================
 
         /**
@@ -170,7 +203,7 @@
             const notificationContainer = document.getElementById('realtime-notification');
             const apiUrl = PENDING_API_URL;
 
-             try {
+            try {
                 const response = await fetch(apiUrl);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -252,7 +285,6 @@
                         method: 'GET',
                         failure: function() {
                             console.error('Falha ao carregar reservas confirmadas via API.');
-                            alert('Erro ao carregar reservas confirmadas!');
                         },
                         className: 'fc-event-booked',
                         textColor: 'white'
@@ -263,7 +295,6 @@
                         method: 'GET',
                         failure: function() {
                             console.error('Falha ao carregar horários disponíveis via API.');
-                            alert('Erro ao carregar horários disponíveis!');
                         },
                         className: 'fc-event-available',
                         display: 'block'
@@ -287,41 +318,50 @@
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
                     const modal = document.getElementById('event-modal');
+                    const isRecurrentCheckbox = document.getElementById('is-recurrent');
 
                     // --- LÓGICA DE SLOT DISPONÍVEL (Agendamento Rápido) ---
                     if (isAvailable) {
                         const quickBookingModal = document.getElementById('quick-booking-modal');
-                        const dateString = event.start.toISOString().slice(0, 10);
 
-                        // Opções de formatação para exibição
-                        const dateDisplay = event.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                        // Garante que o start e end são objetos Date para formatar
+                        const startDate = moment(event.start);
+                        const endDate = moment(event.end);
 
-                        const timeOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
-                        const startTimeInput = event.start.toLocaleTimeString('pt-BR', timeOptions).slice(0, 5); // Ex: "14:00"
-                        const endTimeInput = event.end.toLocaleTimeString('pt-BR', timeOptions).slice(0, 5);   // Ex: "15:00"
+                        const dateString = startDate.format('YYYY-MM-DD'); // Para o input hidden date
+                        const dateDisplay = startDate.format('DD/MM/YYYY');
+
+                        const startTimeInput = startDate.format('HH:mm'); // Ex: "14:00"
+                        const endTimeInput = endDate.format('HH:mm');  // Ex: "15:00"
 
                         const timeSlotDisplay = startTimeInput + ' - ' + endTimeInput;
 
-                        const price = event.extendedProps.price;
-                        const scheduleId = event.extendedProps.schedule_id;
+                        // CORREÇÃO: Usar encadeamento opcional para acessar extendedProps com segurança
+                        const extendedProps = event.extendedProps || {};
+                        const price = extendedProps.price || 0;
 
-                        // CORREÇÃO CRÍTICA: Converter preço para float ANTES de usar toFixed()
-                        const numericPrice = parseFloat(price);
+                        // ID da reserva fixa existente que será atualizada com os dados do cliente
+                        const reservaIdToUpdate = event.id;
 
                         // 1. Preencher os campos ocultos do modal (para envio ao servidor)
-                        document.getElementById('quick-schedule-id').value = scheduleId;
+                        document.getElementById('reserva-id-to-update').value = reservaIdToUpdate;
                         document.getElementById('quick-date').value = dateString;
                         document.getElementById('quick-start-time').value = startTimeInput;
                         document.getElementById('quick-end-time').value = endTimeInput;
-                        document.getElementById('quick-price').value = numericPrice;
-                        // 🚨 Limpa o campo de notas a cada abertura
+                        document.getElementById('quick-price').value = price;
+
+                        // Limpa campos do cliente e checkbox de recorrência
                         document.getElementById('notes').value = '';
+                        document.getElementById('client_name').value = '';
+                        document.getElementById('client_contact').value = '';
+                        isRecurrentCheckbox.checked = false; // <-- Limpa o checkbox
 
                         // 2. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeSlotDisplay}</p>
-                            <p><strong>Valor:</strong> R$ ${numericPrice.toFixed(2).replace('.', ',')}</p>
+                            <p><strong>Valor:</strong> R$ ${parseFloat(price).toFixed(2).replace('.', ',')}</p>
+                            <p class="text-xs text-indigo-500 mt-1">O ID do slot fixo a ser atualizado é: #${reservaIdToUpdate}</p>
                         `;
 
                         // 3. Abrir o modal de agendamento rápido
@@ -336,12 +376,12 @@
                         const modalContent = document.getElementById('modal-content');
 
                         const dateOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
-                        const timeOptions = { hour: '2-digit', minute: '2-digit' };
-                        const dateDisplay = startTime.toLocaleDateString('pt-BR', dateOptions);
+                        const timeOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+                        const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
-                        let timeDisplay = startTime.toLocaleTimeString('pt-BR', timeOptions);
+                        let timeDisplay = moment(startTime).format('HH:mm');
                         if (endTime) {
-                            timeDisplay += ' - ' + endTime.toLocaleTimeString('pt-BR', timeOptions);
+                            timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
                         // Tenta extrair o nome e o preço do título (Ex: "Reservado: Cliente X - R$ 100,00")
@@ -376,8 +416,8 @@
             // --- LÓGICA DE SUBMISSÃO AJAX DO FORMULÁRIO RÁPIDO (AGORA DENTRO DO window.onload) ---
             const form = document.getElementById('quick-booking-form');
             const quickBookingModal = document.getElementById('quick-booking-modal');
+            const isRecurrentCheckbox = document.getElementById('is-recurrent');
 
-            // Variável de controle local para o bloco finally
             let hasCommunicationError = false;
 
             if (form) {
@@ -386,9 +426,14 @@
 
                     const submitButton = document.getElementById('submit-quick-booking');
                     submitButton.disabled = true;
-                    submitButton.textContent = 'Reservando...';
 
-                    hasCommunicationError = false; // Reset da flag
+                    // 🛑 CRÍTICO: Define a rota e o texto do botão com base no checkbox
+                    const isRecurrent = isRecurrentCheckbox.checked;
+                    form.action = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
+                    submitButton.textContent = isRecurrent ? 'Reservando Recorrente...' : 'Confirmar Agendamento...';
+
+
+                    hasCommunicationError = false;
                     let isSuccess = false;
                     let message = 'Reserva criada com sucesso, mas houve erro de comunicação no retorno.';
 
@@ -396,72 +441,75 @@
                         const response = await fetch(form.action, {
                             method: 'POST',
                             body: new FormData(form),
+                            // 🛑 CORREÇÃO CRÍTICA: GARANTE QUE O LARAVEL RESPONDA COM JSON
                             headers: {
-                                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+                                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
                             }
                         });
 
                         let result = {};
 
-                        // Tenta decodificar o JSON. Se falhar, cai no catch.
                         try {
-                            result = await response.json();
-                            isSuccess = response.ok && result.success;
-                            message = result.message;
-                        } catch (jsonError) {
-                            // JSON Corrompido: Seta a flag de erro de comunicação
-                            hasCommunicationError = true;
+                            // Se a resposta NÃO for OK, o status não é 200, e o Laravel tentará enviar o JSON do erro.
+                            if (!response.ok) {
+                                // Tenta ler o erro do JSON
+                                result = await response.json();
+                                // Se for 409, é conflito. Se for 422, é validação.
+                                message = result.message || (result.errors ? 'Erro de Validação. Verifique os campos.' : 'Erro desconhecido do servidor.');
 
-                            console.error('Falha ao decodificar JSON (possível sujeira no PHP):', jsonError);
-                            // Tenta obter o texto bruto da resposta para debug:
+                                // Se for um erro de validação (422), mostra os detalhes.
+                                if (response.status === 422 && result.errors) {
+                                    let validationErrors = Object.values(result.errors).flat().join('\n- ');
+                                    alert('Erro de Validação:\n- ' + validationErrors);
+                                } else {
+                                    alert(message);
+                                }
+
+                                isSuccess = false;
+                                return;
+                            }
+
+                            // Resposta OK (Status 200)
+                            result = await response.json();
+                            isSuccess = result.success;
+                            message = result.message;
+
+                        } catch (jsonError) {
+                            // Erro ao decodificar JSON (Pode ser um erro 500 PHP que não retornou JSON válido)
+                            hasCommunicationError = true;
+                            console.error('Falha ao decodificar JSON (possível 500 no PHP):', jsonError);
                             const responseText = await response.text();
                             console.error('Resposta bruta recebida:', responseText);
+                            alert("Erro interno do servidor. Por favor, verifique os logs.");
+                            isSuccess = false;
+                            return; // Sai do try-catch para o bloco finally
                         }
 
                         if (isSuccess) {
-                            // Sucesso total (JSON e status OK)
                             alert(message);
                             quickBookingModal.classList.add('hidden');
                             form.reset();
-                        } else if (hasCommunicationError) {
-                            // Não faz nada aqui, deixa o bloco finally cuidar
-                            throw new Error("Falha na Comunicação: Execução movida para o bloco finally.");
-
-                        } else if (!isSuccess && response.status === 409) {
-                            // Erro de Conflito (409)
-                            alert(message);
-                        } else if (!isSuccess && response.status >= 400) {
-                            // Outros erros HTTP (4xx, 5xx)
-                            alert(message || 'Erro do Servidor ao processar a requisição.');
                         }
 
                     } catch (error) {
-                        // Tratamento de erro de rede ou o erro forçado acima (Falha na Comunicação)
                         console.error('Erro de Rede/Comunicação:', error);
-
-                        if (error.message.includes('Falha na Comunicação') || error instanceof TypeError) {
-                            hasCommunicationError = true;
-                        }
-
-                        // Dispara o alerta original, já que houve falha na resposta.
-                        alert("Erro de conexão ao tentar reservar. Tente novamente.");
+                        alert("Erro de conexão ao tentar reservar. Verifique sua conexão e tente novamente.");
 
                     } finally {
-                        // 🚀 PONTO CRÍTICO: ATUALIZAÇÃO DO CALENDÁRIO
-                        // Agora 'calendar' é uma variável local garantida neste escopo!
                         if (calendar) {
+                            // Refaz a busca dos eventos, garantindo que o slot reservado suma (ou vire azul)
                             calendar.refetchEvents();
-
-                            // Se houve o erro de comunicação (mas o backend salvou), informamos o usuário.
-                            if (hasCommunicationError) {
-                                quickBookingModal.classList.add('hidden');
-                                alert('A reserva foi salva com sucesso, mas o sistema encontrou um erro de comunicação no retorno. O calendário foi atualizado.');
-                            }
                         }
 
-                        // Reseta o estado do botão
                         submitButton.disabled = false;
                         submitButton.textContent = 'Confirmar Agendamento';
+                        if (isRecurrent) {
+                             submitButton.textContent = 'Reservar Recorrente';
+                        } else {
+                            submitButton.textContent = 'Confirmar Agendamento';
+                        }
                     }
                 });
             }

@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Casts\Attribute; // NOVO: Para usar o formato moderno de Accessors/Mutators
-use App\Models\User; // Necessário para as relações com User
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use App\Models\User;
 
 class Reserva extends Model
 {
@@ -23,11 +23,11 @@ class Reserva extends Model
 
     /**
      * Os atributos que são mass assignable.
-     * Incluindo os campos de recorrência.
+     * Incluindo os campos de recorrência CRÍTICOS.
      */
     protected $fillable = [
         'user_id',
-        'schedule_id',
+        // REMOVIDO: 'schedule_id' (Antigo sistema)
         'date',
         'start_time',
         'end_time',
@@ -39,19 +39,22 @@ class Reserva extends Model
         'manager_id', // ID do gestor que criou/confirmou
 
         // --- Campos para Recorrência ---
-        'is_fixed', // Se é uma reserva fixa recorrente
-        'day_of_week', // Dia da semana para reservas fixas (0=Dom, 1=Seg, ...)
-        'recurrent_series_id', // ID para agrupar a série recorrente
-        'week_index', // Índice dentro da série (0 a 51)
+        'is_fixed',         // Grade de slots fixos gerada pelo ConfigController
+        'day_of_week',      // Dia da semana para filtros (0=Dom, 1=Seg, ...)
+
+        // ✅ CRÍTICO: ADICIONADO para que o UPDATE funcione no agendamento recorrente
+        'is_recurrent',     // Flag para saber se é parte de uma série de cliente fixo
+        'recurrent_series_id', // ID do primeiro slot da série (mestre)
+        // REMOVIDO: 'week_index' (Campo não essencial para a lógica atual)
     ];
 
     /**
      * Os atributos que devem ser convertidos (casted) para tipos nativos.
-     * Incluindo is_fixed.
      */
     protected $casts = [
         'date' => 'date',
-        'is_fixed' => 'boolean', // Conversão para booleano
+        'is_fixed' => 'boolean',
+        'is_recurrent' => 'boolean', // ✅ ADICIONADO: Garante que 0/1 seja interpretado como boolean
     ];
 
     // ------------------------------------------------------------------------
@@ -70,9 +73,9 @@ class Reserva extends Model
      */
     public function scopeIsOccupied($query, string $checkDate, string $checkStartTime, string $checkEndTime)
     {
-        // CORREÇÃO: Deve incluir PENDENTE e CONFIRMADA para ser considerado "ocupado".
+        // Deve incluir PENDENTE e CONFIRMADA para ser considerado "ocupado".
         return $query->where('date', $checkDate) // 1. Filtra pela data específica
-            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]) // 2. FILTRO CRÍTICO: Inclui Pendente e Confirmada
+            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]) // 2. FILTRO CRÍTICO
             ->where(function ($q) use ($checkStartTime, $checkEndTime) {
                 // 3. Lógica de sobreposição de tempo (usando as strings de hora 'HH:MM:SS')
                 $q->where('start_time', '<', $checkEndTime)
@@ -101,23 +104,15 @@ class Reserva extends Model
         return $this->belongsTo(User::class, 'manager_id');
     }
 
-    /**
-     * Relação com a regra de horário (Schedule) que originou a reserva.
-     * Nota: O modelo Schedule deve ser importado ou estar no namespace correto.
-     */
-    public function schedule(): BelongsTo
-    {
-        return $this->belongsTo(Schedule::class, 'schedule_id');
-    }
-
+    // REMOVIDO: O relacionamento 'schedule()' não é mais necessário,
+    // pois o sistema de Schedules foi substituído pelo ArenaConfiguration.
 
     // ------------------------------------------------------------------------
-    // ACESSORES MODERNOS (Laravel 9/10+)
+    // ACESSORES MODERNOS
     // ------------------------------------------------------------------------
 
     /**
      * Retorna o nome amigável do status (usado nas listas do Admin).
-     * Usa o novo formato Attribute::make().
      */
     protected function statusText(): Attribute
     {
@@ -135,13 +130,11 @@ class Reserva extends Model
 
     /**
      * Retorna o nome do criador (Gestor ou Cliente via Web).
-     * Usa o novo formato Attribute::make().
      */
     protected function criadoPorLabel(): Attribute
     {
         return Attribute::make(
             // Se manager_id estiver preenchido, retorna o nome do gestor associado.
-            // Caso contrário, retorna 'Cliente via Web'.
             get: fn () => $this->manager?->name ?? 'Cliente via Web',
         );
     }

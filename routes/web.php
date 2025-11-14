@@ -6,7 +6,8 @@ use Illuminate\Support\Facades\Route;
 // ➡️ IMPORTAÇÕES NECESSÁRIAS
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\Admin\HorarioController; // ⬅️ Controller de Horários na subpasta Admin
+use App\Http\Controllers\ConfigurationController; // NOVO: Controller de Configuração da Arena
+// ❌ IMPORTAÇÃO ANTIGA REMOVIDA: use App\Http\Controllers\Admin\HorarioController;
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -21,7 +22,6 @@ Route::get('/', function () {
 
 // Rota pública para o cliente visualizar (GET) e fazer a pré-reserva (POST)
 Route::get('/agendamento', [ReservaController::class, 'index'])->name('reserva.index');
-// CORREÇÃO CRÍTICA: O POST agora aponta para o método storePublic()
 Route::post('/agendamento', [ReservaController::class, 'storePublic'])->name('reserva.store');
 
 
@@ -45,19 +45,23 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         ->name('api.reservas.pendentes');
 
     // =========================================================================
-    // 🗓️ NOVAS ROTAS API PARA FULLCALENDAR (DASHBOARD) - ADICIONADAS AQUI
+    // 🗓️ ROTAS API PARA FULLCALENDAR (AGORA NO RESERVACONTROLLER)
     // =========================================================================
-    // 1. Endpoint para RESERVAS CONFIRMADAS (AdminController)
+    // 1. Endpoint para RESERVAS CONFIRMADAS (Mantido no AdminController, pois contém mais lógica de exibição)
     Route::get('/api/reservas/confirmadas', [AdminController::class, 'getConfirmedReservasApi'])
         ->name('api.reservas.confirmadas');
 
-    // 2. Endpoint para HORÁRIOS DISPONÍVEIS (HorarioController)
-    Route::get('/api/horarios/disponiveis', [HorarioController::class, 'getAvailableSlotsApi'])
+    // 2. Endpoint para HORÁRIOS DISPONÍVEIS (Movido para ReservaController - Nova Lógica)
+    Route::get('/api/horarios/disponiveis', [ReservaController::class, 'getAvailableSlotsApi'])
         ->name('api.horarios.disponiveis');
 
-    // 🚀 NOVO: Rota API para Agendamento Rápido Manual (POST)
-    Route::post('/api/reservas/store-quick', [AdminController::class, 'storeQuickReservaApi'])
+    // 🚀 Rota API para Agendamento Rápido Pontual (POST)
+    Route::post('/api/reservas/store-quick', [ReservaController::class, 'storeQuickReservaApi'])
         ->name('api.reservas.store_quick');
+
+    // ✅ NOVA ROTA: Para Agendamento Rápido Recorrente (POST)
+    Route::post('/api/reservas/store-recurrent', [ReservaController::class, 'storeRecurrentReservaApi'])
+        ->name('api.reservas.store_recurrent');
     // =========================================================================
 
     // ===============================================
@@ -65,16 +69,19 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
     // ===============================================
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // --- ROTAS DE HORÁRIOS (CRUD) ---
-        Route::get('/horarios', [HorarioController::class, 'index'])->name('horarios.index');
-        Route::post('/horarios', [HorarioController::class, 'store'])->name('horarios.store');
-        Route::get('/horarios/{horario}/edit', [HorarioController::class, 'edit'])->name('horarios.edit');
-        Route::patch('/horarios/{horario}', [HorarioController::class, 'update'])->name('horarios.update');
-        Route::patch('/horarios/{horario}/status', [HorarioController::class, 'updateStatus'])->name('horarios.update_status');
-        Route::delete('/horarios/{horario}', [HorarioController::class, 'destroy'])->name('horarios.destroy');
+        // ❌ LIMPEZA: TODAS AS ROTAS DE HORARIO CONTROLLER FORAM REMOVIDAS AQUI
+
+        // 🚀 NOVO MÓDULO: CONFIGURAÇÃO DE HORÁRIOS DA ARENA
+        Route::get('/config', [ConfigurationController::class, 'index'])->name('config.index');
+        Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
+        Route::get('/config/generate', [ConfigurationController::class, 'generateFixedReservas'])->name('config.generate');
+
+        // Rotas AJAX para gerenciar slots fixos individuais (usadas na tabela de gerenciamento)
+        Route::post('/config/fixed-reserva/{reserva}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('config.update_price');
+        Route::post('/config/fixed-reserva/{reserva}/status', [ConfigurationController::class, 'updateFixedReservaStatus'])->name('config.update_status');
 
 
-        // --- ROTAS DE GERENCIAMENTO DE RESERVAS ---
+        // --- ROTAS DE GERENCIAMENTO DE RESERVAS (Mantidas) ---
 
         // Listagens
         Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index'); // Pendentes/Todas
@@ -85,25 +92,14 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
 
         // Criação Manual (Gestor)
         Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
-        // Rota de POST do Admin, chamando o método do AdminController
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
         Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
 
         // AÇÕES (STATUS E EXCLUSÃO)
-
-        // ROTA GENÉRICA: Usada para mudar o status de qualquer reserva (via formulário na tela 'show')
         Route::patch('reservas/{reserva}/status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
-
-        // ROTA DE CONFIRMAÇÃO (Específica)
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
-
-        // ROTA DE REJEIÇÃO (Específica)
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
-
-        // ROTA DE CANCELAMENTO (Específica)
         Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
-
-        // ROTA DE EXCLUSÃO PERMANENTE (Usada na lista geral)
         Route::delete('reservas/{reserva}', [AdminController::class, 'destroyReserva'])->name('reservas.destroy');
 
 
