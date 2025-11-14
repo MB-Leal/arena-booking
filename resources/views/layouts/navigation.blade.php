@@ -11,7 +11,6 @@
                 </div>
 
                 <!-- Navigation Links (Desktop) -->
-                <!-- Links administrativos com URLs CORRIGIDAS para o seu web.php e estilo discreto -->
                 <div class="hidden space-x-4 sm:-my-px sm:ms-10 sm:flex items-center">
 
                     <!-- 1. Dashboard -->
@@ -19,34 +18,25 @@
                         {{ __('Home') }}
                     </x-nav-link>
 
-                     <!-- 5. Agendar Reserva Manual (Rota Correta: admin.reservas.create) -->
-                    <x-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="
+                    <!-- 2. Reservas Confirmadas -->
+                    <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
                         px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
                         hover:bg-gray-50 hover:text-gray-700
                         focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
-                        {{ __('Agendar') }}
+                        {{ __('Confirmadas') }}
                     </x-nav-link>
 
-                      <!-- 3. Reservas Confirmadas (Rota Correta: admin.reservas.confirmed_index) -->
-                    <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
-                       px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Reservas Confirmadas') }}
-                    </x-nav-link>
-
-                    <!-- 2. Ver Reservas Pendentes (Rota Correta: admin.reservas.index) -->
+                    <!-- 3. Reservas Pendentes WEB -->
                     <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
                         px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
                         hover:bg-gray-50 hover:text-gray-700
                         focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
-                        {{ __('Reservas Pendentes WEB') }}
+                        {{ __('Pendentes') }}
                     </x-nav-link>
 
-                    <!-- 6. Novo Usuário (Rota Correta: admin.users.create) -->
+                    <!-- 4. Novo Usuário -->
                     <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
                         px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
                         hover:bg-gray-50 hover:text-gray-700
@@ -54,10 +44,20 @@
                     ">
                         {{ __('Novo Usuário') }}
                     </x-nav-link>
+
+                    <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+                    <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="
+                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                        hover:bg-gray-50 hover:text-gray-700
+                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                    ">
+                        {{ __('Configuração') }}
+                    </x-nav-link>
+
                 </div>
             </div>
 
-            <!-- Settings Dropdown (Sem alterações abaixo) -->
+            <!-- Settings Dropdown (Sem alterações) -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
@@ -82,8 +82,8 @@
                             @csrf
 
                             <x-dropdown-link :href="route('logout')"
-                                    onclick="event.preventDefault();
-                                                this.closest('form').submit();">
+                                                 onclick="event.preventDefault();
+                                                                this.closest('form').submit();">
                                 {{ __('Log Out') }}
                             </x-dropdown-link>
                         </form>
@@ -106,26 +106,29 @@
     <!-- Responsive Navigation Menu (Mobile) -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
-            <!-- Dashboard (Existing) -->
+            <!-- 1. Dashboard -->
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Agendar') }}
-            </x-responsive-nav-link>
+            <!-- 2. Reservas Confirmadas -->
+            <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
+                 {{ __('Confirmadas') }}
+             </x-responsive-nav-link>
 
-             <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Reservas Confirmadas') }}
-            </x-responsive-nav-link>
-
-            <!-- NEW: Admin Links for Mobile/Responsive View (URLs Corrigidas) -->
+            <!-- 3. Reservas Pendentes -->
             <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Reservas Pendentes') }}
+                {{ __('Pendentes') }}
             </x-responsive-nav-link>
 
+            <!-- 4. Novo Usuário -->
             <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-gray-500 text-gray-600">
                 {{ __('Novo Usuário') }}
+            </x-responsive-nav-link>
+
+            <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+            <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
+                {{ __('Configuração') }}
             </x-responsive-nav-link>
         </div>
 
@@ -146,8 +149,8 @@
                     @csrf
 
                     <x-responsive-nav-link :href="route('logout')"
-                                onclick="event.preventDefault();
-                                            this.closest('form').submit();">
+                                                 onclick="event.preventDefault();
+                                                                this.closest('form').submit();">
                         {{ __('Log Out') }}
                     </x-responsive-nav-link>
                 </form>
