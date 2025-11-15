@@ -51,7 +51,7 @@
                         hover:bg-gray-50 hover:text-gray-700
                         focus:outline-none focus:bg-gray-50 focus:text-gray-700
                     ">
-                        {{ __('Configuração') }}
+                        {{ __('Funcionamento') }}
                     </x-nav-link>
 
                 </div>
@@ -128,7 +128,7 @@
 
             <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
             <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
-                {{ __('Configuração') }}
+                {{ __('Funcionamento') }}
             </x-responsive-nav-link>
         </div>
 

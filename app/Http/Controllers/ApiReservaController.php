@@ -11,8 +11,6 @@ class ApiReservaController extends Controller
 {
     // =========================================================================
     // ✅ MÉTODO: Horários Disponíveis p/ Calendário (API) - ISOLADO E ROBUSTO
-    // Foi movido de ReservaController para este Controller dedicado para evitar
-    // conflitos de injeção de dependência na rota.
     // =========================================================================
     /**
      * Retorna os slots gerados pelas Reservas Fixas (is_fixed=true) que estão disponíveis (GREEN).
@@ -25,6 +23,7 @@ class ApiReservaController extends Controller
             $endDate = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
             // 1. Busca todos os slots de horário fixo (GRADE DE DISPONIBILIDADE)
+            // 🛑 CRÍTICO: Filtra APENAS slots com status CONFIRMADA. Se o status for CANCELADA, é ignorado!
             $allFixedSlots = Reserva::where('is_fixed', true)
                                      ->whereDate('date', '>=', $startDate->toDateString())
                                      ->whereDate('date', '<=', $endDate->toDateString())
@@ -37,7 +36,7 @@ class ApiReservaController extends Controller
                 $slotStartTime = $slot->start_time;
                 $slotEndTime = $slot->end_time;
 
-                // 🛑 CORREÇÃO CRÍTICA: Ignora o slot se o tempo for inválido (NULL/Empty)
+                // 🛑 CRÍTICO: Ignora o slot se o tempo for inválido (NULL/Empty)
                 if (empty($slotStartTime) || empty($slotEndTime)) {
                     Log::warning("Slot fixo ID {$slot->id} pulado devido a start_time/end_time inválido.");
                     continue;
@@ -60,16 +59,11 @@ class ApiReservaController extends Controller
                                                  })
                                                  ->exists();
 
-                // 3. Checa se o slot FIXO foi marcado como CANCELADO/Indisponível na tela de Config
-                $isManuallyCancelled = Reserva::where('is_fixed', true)
-                                             ->where('date', $slotDateString)
-                                             ->where('start_time', $slotStartTime)
-                                             ->where('status', Reserva::STATUS_CANCELADA)
-                                             ->exists();
+                // 🛑 NOVO/CORRIGIDO: O slot só entra no loop se estiver CONFIRMADA (disponível por padrão).
 
-
-                // 4. Se o slot NÃO estiver ocupado por um pontual E NÃO estiver manualmente cancelado, ele está DISPONÍVEL (GREEN).
-                if (!$isOccupiedByPunctual && !$isManuallyCancelled) {
+                // 3. Se o slot NÃO estiver ocupado por um pontual, ele está DISPONÍVEL (GREEN).
+                // A checagem de status CANCELADA é feita automaticamente na Query 1.
+                if (!$isOccupiedByPunctual) {
 
                     $title = "Slot Livre: R$ " . number_format($slot->price, 2, ',', '.');
 
@@ -103,9 +97,9 @@ class ApiReservaController extends Controller
         }
     }
 
-    // Mantendo getAvailableTimes aqui também, pois é um endpoint API relacionado.
     // =========================================================================
     // ✅ MÉTODO: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - ROBUSTO
+    // (JÁ ESTAVA CORRETO)
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica (página pública e /admin/reservas/create).
@@ -119,8 +113,10 @@ class ApiReservaController extends Controller
         $now = Carbon::now();
 
         // 1. Busca todos os slots de horário fixo (GRADE DE DISPONIBILIDADE) para esta data
+        // 🛑 CRÍTICO: Não busca slots com status CANCELADA
         $allFixedSlots = Reserva::where('is_fixed', true)
                                  ->whereDate('date', $dateString)
+                                 ->where('status', Reserva::STATUS_CONFIRMADA) // Filtro para ignorar CANCELADA
                                  ->get();
 
         // 2. Busca todas as RESERVAS PONTUAIS (ocupações)
@@ -146,11 +142,6 @@ class ApiReservaController extends Controller
 
             // Verifica se o slot já passou hoje
             if ($isToday && $slotEndDateTime->lt($now)) {
-                continue;
-            }
-
-            // Verifica se o slot está CANCELADO/Indisponível (manutenção)
-            if ($slot->status === Reserva::STATUS_CANCELADA) {
                 continue;
             }
 

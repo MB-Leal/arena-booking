@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 
 class ConfigurationController extends Controller
 {
@@ -33,8 +35,10 @@ class ConfigurationController extends Controller
         }
 
         // 3. Obtém as próximas 50 Reservas Fixas para exibição na tabela (usando is_fixed=true)
+        // 🛑 CRÍTICO: Inclui slots CANCELADOS para que o gestor possa reativá-los!
         $fixedReservas = Reserva::where('is_fixed', true)
             ->where('date', '>=', Carbon::today()->toDateString())
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA])
             ->orderBy('date')
             ->orderBy('start_time')
             ->limit(50)
@@ -201,9 +205,10 @@ class ConfigurationController extends Controller
         $today = Carbon::today();
         $endDate = $today->copy()->addYear();
 
-        // 🛑 CORREÇÃO DE SEGURANÇA: Limpa APENAS os FixedReservas futuras que são slots GENÉRICOS
+        // 🛑 CORREÇÃO DE SEGURANÇA: Limpa APENAS os FixedReservas futuras que são slots GENÉRICOS (Slot Fixo de 1h)
+        // Slots com preço/status editados pelo gestor SÃO PRESVADOS.
         Reserva::where('is_fixed', true)
-            ->where('client_name', 'Slot Fixo de 1h') // ⬅️ CONDIÇÃO CRÍTICA
+            ->where('client_name', 'Slot Fixo de 1h') // ⬅️ CONDIÇÃO CRÍTICA (Somente genéricos)
             ->where('date', '>=', $today->toDateString())
             ->delete();
 
@@ -238,11 +243,23 @@ class ConfigurationController extends Controller
 
                             // 🛑 Checagem de Conflito CRÍTICA
                             // Verifica se o horário já está ocupado por uma reserva REAL de cliente (is_fixed=false)
-                            // OU se já existe um SLOT FIXO NÃO-GENÉRICO (preservado acima)
+                            // OU se já existe um SLOT FIXO NÃO-GENÉRICO (editado pelo gestor)
                             $isOccupied = Reserva::isOccupied($currentDateString, $currentSlotStartTime, $nextSlotEndTime)
                                 ->where(function ($query) {
-                                    $query->where('is_fixed', false) // Reserva de cliente REAL
-                                          ->orWhere('client_name', '!=', 'Slot Fixo de 1h'); // Slot fixo editado
+                                    $query->where('is_fixed', false) // Reserva de cliente REAL (Pontual/Recorrente)
+                                          ->orWhere(function($q) {
+                                               // Slot fixo editado (preço/status) que foi PRESERVADO acima
+                                               $q->where('is_fixed', true)
+                                                 ->where('client_name', '!=', 'Slot Fixo de 1h');
+                                          });
+                                })
+                                // 🛑 NOVO FILTRO: Adiciona a checagem de slots fixos cancelados (is_fixed=true, status=cancelled)
+                                ->orWhere(function ($query) use ($currentDateString, $currentSlotStartTime, $nextSlotEndTime) {
+                                    $query->where('is_fixed', true)
+                                          ->where('date', $currentDateString)
+                                          ->where('status', Reserva::STATUS_CANCELADA)
+                                          ->where('start_time', $currentSlotStartTime)
+                                          ->where('end_time', $nextSlotEndTime);
                                 })
                                 ->exists();
 
@@ -261,7 +278,8 @@ class ConfigurationController extends Controller
                                 'price' => $price,
                                 'client_name' => 'Slot Fixo de 1h',
                                 'client_contact' => 'N/A',
-                                'status' => 'confirmed',
+                                // O status padrão é CONFIRMED (Disponível)
+                                'status' => Reserva::STATUS_CONFIRMADA,
                                 'is_fixed' => true,
                             ]);
                             $newReservasCount++;
@@ -286,36 +304,52 @@ class ConfigurationController extends Controller
     /**
      * Métodos de gerenciamento (updateFixedReservaPrice e toggleFixedReservaStatus)
      */
-    public function updateFixedReservaPrice(Request $request, $id)
+    public function updateFixedReservaPrice(Request $request, Reserva $reserva) // ✅ CORRIGIDO: Usando Model Binding
     {
         $request->validate(['price' => 'required|numeric|min:0']);
 
-        $reserva = Reserva::where('is_fixed', true)->find($id);
-
-        if (!$reserva) {
-            return response()->json(['success' => false, 'error' => 'Reserva fixa não encontrada.'], 404);
+        // 🛑 CRÍTICO: Valida se a reserva encontrada é de fato um slot fixo
+        if (!$reserva->is_fixed) {
+             return response()->json(['success' => false, 'error' => 'Ação permitida apenas em slots fixos (is_fixed=true).'], 403);
         }
 
+        // Se o slot era genérico, ele se torna um slot fixo "editado" com o nome do gestor.
+        if ($reserva->client_name === 'Slot Fixo de 1h') {
+             $reserva->client_name = 'Slot Editado (Gestor: ' . Auth::user()->name . ')';
+        }
+
+        $reserva->manager_id = Auth::id(); // Marca o gestor que alterou
         $reserva->price = $request->price;
         $reserva->save();
 
         return response()->json(['success' => true, 'message' => 'Preço atualizado com sucesso.']);
     }
 
-    public function toggleFixedReservaStatus(Request $request, $id)
+    /**
+     * ✅ NOVO: Altera o status de um slot fixo entre 'confirmed' (Disponível) e 'cancelled' (Indisponível).
+     */
+    public function toggleFixedReservaStatus(Request $request, Reserva $reserva) // ✅ CORRIGIDO: Usando Model Binding
     {
-        $request->validate(['status' => 'required|in:confirmed,cancelled']);
+        // 🛑 CRÍTICO: Valida se o novo status é 'confirmed' ou 'cancelled'
+        $request->validate(['status' => ['required', 'string', Rule::in([Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA])]]);
 
-        $reserva = Reserva::where('is_fixed', true)->find($id);
-
-        if (!$reserva) {
-            return response()->json(['success' => false, 'error' => 'Reserva fixa não encontrada.'], 404);
+        // 🛑 CRÍTICO: Valida se a reserva encontrada é de fato um slot fixo
+        if (!$reserva->is_fixed) {
+             return response()->json(['success' => false, 'error' => 'Ação permitida apenas em slots fixos (is_fixed=true).'], 403);
         }
 
-        $reserva->status = $request->status;
+        $newStatus = $request->status;
+
+        // Se o slot era genérico, ele se torna um slot fixo "editado" com o nome do gestor.
+        if ($reserva->client_name === 'Slot Fixo de 1h') {
+             $reserva->client_name = 'Slot Editado (Gestor: ' . Auth::user()->name . ')';
+        }
+
+        $reserva->manager_id = Auth::id(); // Marca o gestor que alterou
+        $reserva->status = $newStatus;
         $reserva->save();
 
-        $action = $request->status === 'confirmed' ? 'disponibilizado' : 'marcado como indisponível';
+        $action = $newStatus === Reserva::STATUS_CONFIRMADA ? 'disponibilizado' : 'marcado como indisponível (manutenção)';
 
         return response()->json(['success' => true, 'message' => "Slot $action com sucesso."]);
     }

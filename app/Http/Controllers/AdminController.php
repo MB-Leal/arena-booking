@@ -28,7 +28,7 @@ class AdminController extends Controller
         // Esta linha continua calculando a contagem de pendências
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
-        // ✅ NOVO: Pega as séries recorrentes que estão terminando (usando a lógica do ReservaController)
+        // ✅ CRÍTICO: Pega as séries recorrentes que estão terminando (usando a lógica do ReservaController)
         $reservaController = app(\App\Http\Controllers\ReservaController::class);
         $expiringSeries = $reservaController->getEndingRecurrentSeries();
         $expiringSeriesCount = count($expiringSeries);
@@ -75,20 +75,13 @@ class AdminController extends Controller
                 $statusText = 'PENDENTE: ';
                 $className = 'fc-event-pending';
             } elseif ($isRecurrent) {
-                $statusColor = '#6D28D9'; // Violet 700 - Cor para Recorrente Confirmada
+                $statusColor = '#C026D3'; // Fuchsia 700 - Cor para Recorrente Confirmada
                 $statusText = 'RECORRENTE: ';
                 $className = 'fc-event-recurrent';
             } else {
                 $statusColor = '#4f46e5'; // Indigo 600 - Cor para Avulsa Confirmada
                 $statusText = 'RESERVADO: ';
                 $className = 'fc-event-quick';
-            }
-
-            // Slots cancelados (apenas se mostrarmos reservas fixas que foram indisponibilizadas, mas mantemos a estrutura por segurança)
-            if ($reserva->is_fixed && $reserva->status === Reserva::STATUS_CANCELADA) {
-                 $statusColor = '#6b7280'; // Cinza (Indisponível)
-                 $statusText = 'INDISPONÍVEL: ';
-                 $className = 'fc-event-cancelled-fixed';
             }
 
             // Monta o título do evento
@@ -192,8 +185,10 @@ class AdminController extends Controller
             ->with('warning', 'A criação manual foi simplificada! Por favor, use o calendário (slots verdes) na tela principal para agendamento rápido.');
     }
 
-    // ❌ REMOVIDO: public function storeReserva(Request $request) { ... }
-    // ❌ REMOVIDO: public function makeRecurrent(Request $request) { ... }
+    // 🛑 REMOVIDOS os métodos storeReserva e makeRecurrent, pois foram substituídos
+    // pela lógica de Agendamento Rápido via API no ReservaController.
+    // public function storeReserva(Request $request) { /* ... */ }
+    // public function makeRecurrent(Request $request) { /* ... */ }
 
     // =========================================================================
     // ✅ NOVO MÉTODO: Cancelamento Pontual de Reserva Recorrente (Exceção)
@@ -211,9 +206,15 @@ class AdminController extends Controller
 
         // 1. Captura as informações do slot original
         $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
+        $cancellationReason = $request->input('cancellation_reason');
 
         DB::beginTransaction();
         try {
+            // Marca o motivo antes de deletar (para histórico, se necessário)
+            $reserva->cancellation_reason = $cancellationReason . " (Pontual da Série)";
+            $reserva->manager_id = Auth::id();
+            $reserva->save();
+
             // 2. Apaga a reserva real do cliente (A reserva recorrente)
             $reserva->delete();
 
@@ -285,13 +286,14 @@ class AdminController extends Controller
         // 3. Executa o cancelamento em massa (Deletar as reservas reais e recriar slots fixos)
         DB::beginTransaction();
         try {
-            // Captura os dados para recriação do slot
-            $start = $reservasToCancel->first()->start_time;
-            $end = $reservasToCancel->first()->end_time;
-            $dayOfWeek = $reservasToCancel->first()->day_of_week;
-            $price = $reservasToCancel->first()->price;
+            // Captura os dados para recriação do slot (de qualquer item da série)
+            $firstReserva = $reservasToCancel->first();
+            $start = $firstReserva->start_time;
+            $end = $firstReserva->end_time;
+            $dayOfWeek = $firstReserva->day_of_week;
+            $price = $firstReserva->price;
 
-            // Marca o motivo em cada reserva antes de deletar (Embora o delete seja permanente, é uma boa prática)
+            // Marca o motivo em cada reserva antes de deletar
             $reservasToCancel->each(function($r) use ($cancellationReason, $dayOfWeek) {
                 $r->cancellation_reason = $cancellationReason . " (Série Recorrente - Dia da Semana: " . $dayOfWeek . ")";
                 $r->manager_id = Auth::id();
@@ -335,15 +337,65 @@ class AdminController extends Controller
 
     // --- MÉTODOS DE AÇÕES PADRÃO (CONFIRMAR, REJEITAR, CANCELAR) ---
 
+    // ✅ CORRIGIDO: Agora recebe o motivo do cancelamento via POST do Modal
+    public function cancelarReserva(Request $request, Reserva $reserva)
+    {
+        // 🛑 Validação do Motivo do Cancelamento
+        $request->validate([
+            'cancellation_reason' => 'required|string|min:5',
+        ]);
+
+        if ($reserva->is_recurrent) {
+             return response()->json(['success' => false, 'message' => 'Esta reserva é recorrente. Use o botão "Cancelar ESTE DIA" ou "Cancelar SÉRIE" para gerenciar.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Atualiza o status para cancelado e salva o motivo
+            $reserva->update([
+                'status' => Reserva::STATUS_CANCELADA,
+                'manager_id' => Auth::id(),
+                'cancellation_reason' => $request->input('cancellation_reason'),
+            ]);
+
+            // 2. Recria o slot fixo de disponibilidade
+            $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
+
+             Reserva::create([
+                'date' => $originalData['date']->toDateString(),
+                'day_of_week' => $originalData['day_of_week'],
+                'start_time' => $originalData['start_time'],
+                'end_time' => $originalData['end_time'],
+                'price' => $originalData['price'],
+                'client_name' => 'Slot Fixo de 1h', // Nome padrão
+                'client_contact' => 'N/A',
+                'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
+                'is_fixed' => true, // Volta a ser um slot fixo
+                'manager_id' => Auth::id(),
+            ]);
+
+            // 3. Deleta a reserva cancelada para que a recriação do slot fixo seja a única reserva
+            $reserva->delete();
+
+            DB::commit();
+
+            return response()->json(['success' => true, 'message' => 'Reserva pontual cancelada e slot liberado com sucesso.'], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao cancelar a reserva ID {$reserva->id}: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Erro ao processar o cancelamento: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function confirmarReserva(Reserva $reserva)
     {
-        // Garante que o método checkOverlap é chamado a partir do ReservaController
+        // Garante que o método checkOverlap é chamado a partir do ReservaController (agora público)
         $reservaController = app(\App\Http\Controllers\ReservaController::class);
 
         try {
             $dateString = $reserva->date->toDateString();
-            // isFixed = false (é uma reserva real)
-            $isFixed = false;
+            $isFixed = $reserva->is_fixed;
             $ignoreId = $reserva->id;
 
             // 1. Checagem de Conflito (Usando ReservaController)
@@ -379,56 +431,6 @@ class AdminController extends Controller
             return back()->with('error', 'Erro ao rejeitar a reserva: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Altera o status de uma reserva pontual para CANCELADA.
-     * Esta rota é chamada pelo modal de cancelamento do Calendário/Lista Confirmadas.
-     */
-    public function cancelarReserva(Request $request, Reserva $reserva)
-    {
-        // 🛑 Validação do Motivo do Cancelamento
-        $request->validate([
-            'cancellation_reason' => 'required|string|min:5',
-        ]);
-
-        if ($reserva->is_recurrent) {
-             return response()->json(['success' => false, 'message' => 'Esta reserva é recorrente. Use o botão "Cancelar ESTE DIA" ou "Cancelar SÉRIE" para gerenciar.'], 422);
-        }
-
-        try {
-            $reserva->update([
-                'status' => Reserva::STATUS_CANCELADA,
-                'manager_id' => Auth::id(),
-                'cancellation_reason' => $request->input('cancellation_reason'), // Salva o motivo
-            ]);
-
-            // Recria o slot fixo de disponibilidade
-            $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
-
-             Reserva::create([
-                'date' => $originalData['date']->toDateString(),
-                'day_of_week' => $originalData['day_of_week'],
-                'start_time' => $originalData['start_time'],
-                'end_time' => $originalData['end_time'],
-                'price' => $originalData['price'],
-                'client_name' => 'Slot Fixo de 1h', // Nome padrão
-                'client_contact' => 'N/A',
-                'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
-                'is_fixed' => true, // Volta a ser um slot fixo
-                'manager_id' => Auth::id(),
-            ]);
-
-            // Deleta a reserva cancelada para que a recriação do slot fixo seja a única reserva
-            $reserva->delete();
-
-            return response()->json(['success' => true, 'message' => 'Reserva pontual cancelada e slot liberado com sucesso.'], 200);
-
-        } catch (\Exception $e) {
-            Log::error("Erro ao cancelar a reserva ID {$reserva->id}: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar o cancelamento: ' . $e->getMessage()], 500);
-        }
-    }
-
 
     public function updateStatusReserva(Request $request, Reserva $reserva)
     {
@@ -469,6 +471,9 @@ class AdminController extends Controller
         if ($newStatus === Reserva::STATUS_CANCELADA) {
             $request->validate(['cancellation_reason' => 'nullable|string|min:5']);
             $updateData['cancellation_reason'] = $request->input('cancellation_reason') ?? 'Cancelado via tela de status (Motivo não fornecido).';
+
+            // 🛑 AÇÃO CRÍTICA: Se for CANCELADA via esta rota, redireciona para o Dashboard (o fluxo ideal é pelo modal)
+            return redirect()->route('dashboard')->with('warning', 'Reserva marcada como cancelada. Use o modal de cancelamento na lista/calendário para liberar o slot.');
         }
 
         try {

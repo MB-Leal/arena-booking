@@ -8,7 +8,6 @@ use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ApiReservaController; // 🚀 Controller Dedicado para APIs
-// ❌ IMPORTAÇÃO ANTIGA REMOVIDA: use App\Http\Controllers\Admin\HorarioController;
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -71,8 +70,6 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
     // ===============================================
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // ❌ LIMPEZA: TODAS AS ROTAS DE HORARIO CONTROLLER FORAM REMOVIDAS AQUI
-
         // 🚀 NOVO MÓDULO: CONFIGURAÇÃO DE HORÁRIOS DA ARENA
         Route::get('/config', [ConfigurationController::class, 'index'])->name('config.index');
         Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
@@ -80,7 +77,9 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
 
         // Rotas AJAX para gerenciar slots fixos individuais (usadas na tabela de gerenciamento)
         Route::post('/config/fixed-reserva/{reserva}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('config.update_price');
-        Route::post('/config/fixed-reserva/{reserva}/status', [ConfigurationController::class, 'updateFixedReservaStatus'])->name('config.update_status');
+
+        // 🛑 CRÍTICO: ROTA DE ALTERAÇÃO DE STATUS (Nome corrigido para admin.config.update_status, conforme esperado pelo JS)
+        Route::post('/config/fixed-reserva/{reserva}/status', [ConfigurationController::class, 'toggleFixedReservaStatus'])->name('config.update_status');
 
 
         // --- ROTAS DE GERENCIAMENTO DE RESERVAS (Mantidas) ---
@@ -97,12 +96,13 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
         Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
 
+
         // AÇÕES (STATUS E EXCLUSÃO)
         Route::patch('reservas/{reserva}/status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
 
-        // 1. Cancelamento Pontual (UPDATE DE STATUS)
+        // 1. Cancelamento Pontual (UPDATE DE STATUS) - ROTA POST PARA ENVIAR O MOTIVO
         Route::post('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 
         // ❌ Rota DELETE Antiga (Destrói Reserva Pontual)
@@ -114,7 +114,7 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         // 3. Cancelamento da Série Inteira (DELETE SÉRIE & RECRIAR SLOTS)
         Route::post('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
 
-        // 🚀 4. RENOVAÇÃO DE SÉRIE RECORRENTE (A ROTA QUE ESTAVA FALTANDO)
+        // 🚀 4. RENOVAÇÃO DE SÉRIE RECORRENTE
         Route::post('reservas/{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('reservas.renew_serie');
 
 

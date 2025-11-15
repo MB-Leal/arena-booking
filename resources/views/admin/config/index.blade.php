@@ -20,6 +20,7 @@
             background-color: #d1fae5; /* Green 100 */
             color: #065f46; /* Green 900 */
         }
+        /* ✅ NOVO: Estilo para slot Indisponível (Cancelado) */
         .status-cancelled {
             background-color: #fee2e2; /* Red 100 */
             color: #991b1b; /* Red 900 */
@@ -211,11 +212,11 @@
                 </div>
             </div>
 
-            {{-- ... Tabela de Gerenciamento de Reservas Fixas Geradas (MANTIDA) ... --}}
+            {{-- ... Tabela de Gerenciamento de Reservas Fixas Geradas ... --}}
              <div class="bg-white dark:bg-gray-800 shadow-xl sm:rounded-lg">
                  <div class="p-6 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                      <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Gerenciar Horários Recorrentes Gerados (Próximas Reservas Fixas)</h3>
-                     <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Esta lista é atualizada automaticamente ao salvar a configuração. Filtre a data no seu admin padrão se a lista for muito longa.</p>
+                     <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Esta lista exibe os próximos slots disponíveis (VERDES). Use os botões para desativar (manutenção) ou reativar.</p>
 
                      <div class="overflow-x-auto">
                          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -251,7 +252,7 @@
 
                                              <span class="icon-edit" id="edit-icon-{{ $reserva->id }}"
                                                      data-id="{{ $reserva->id }}"
-                                                     onclick="toggleEdit({{ $reserva->id }}, true)">
+                                                     onclick="toggleEdit({{ $reserva->id }}, true)"> {{-- ✅ CORREÇÃO AQUI --}}
                                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                              </span>
 
@@ -288,7 +289,11 @@
 
     <script>
         // TOKEN CSRF NECESSÁRIO PARA REQUISIÇÕES AJAX
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : document.querySelector('input[name="_token"]').value;
+
+        // ✅ INJEÇÃO DA ROTA CORRIGIDA (com placeholder)
+        const UPDATE_STATUS_URL = '{{ route("admin.config.update_status", ":id") }}';
+        const UPDATE_PRICE_URL = '{{ route("admin.config.update_price", ":id") }}';
 
         // Contadores para garantir índices únicos ao adicionar novos slots
         const nextIndex = {};
@@ -440,14 +445,17 @@
             @endforeach
         });
 
-        // Lógica de Edição de Preço e Status (Tabela de Reservas Fixas) - Mantida
-        // ... (toggleEdit, updatePrice, toggleStatus) ...
+        // --- Lógica de Edição de Preço e Status (Tabela de Reservas Fixas) ---
 
         function toggleEdit(id, isEditing) {
             const display = document.getElementById(`price-display-${id}`);
             const input = document.getElementById(`price-input-${id}`);
             const editIcon = document.getElementById(`edit-icon-${id}`);
             const saveIcon = document.getElementById(`save-icon-${id}`);
+            const statusBtn = document.getElementById(`status-btn-${id}`);
+
+            // Desabilita o botão de status durante a edição de preço
+            if (statusBtn) statusBtn.disabled = isEditing;
 
             if (isEditing) {
                 display.classList.add('hidden');
@@ -467,13 +475,23 @@
             const input = document.getElementById(`price-input-${id}`);
             const newPrice = parseFloat(input.value);
 
+            if (!confirm(`Confirma a alteração do preço para R$ ${newPrice.toFixed(2).replace('.', ',')}?`)) {
+                 toggleEdit(id, false); // Cancela a edição se o usuário negar
+                 return;
+            }
+
             if (isNaN(newPrice) || newPrice < 0) {
                 alert('Preço inválido.');
                 return;
             }
 
+            toggleEdit(id, false); // Esconde botões de edição/salvar
+            document.getElementById(`status-btn-${id}`).disabled = true; // Desabilita o status btn
+
             try {
-                const response = await fetch(`/admin/config/fixed-reserva/${id}/price`, {
+                // ✅ CORREÇÃO APLICADA: Usa UPDATE_PRICE_URL com replace
+                const url = UPDATE_PRICE_URL.replace(':id', id);
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -487,26 +505,43 @@
                 if (response.ok && result.success) {
                     document.getElementById(`price-display-${id}`).textContent = newPrice.toFixed(2).replace('.', ',');
                     alert(result.message);
-                    toggleEdit(id, false);
                 } else {
                     alert('Erro ao atualizar preço: ' + (result.error || result.message));
                 }
             } catch (error) {
                 console.error('Erro de rede ao atualizar preço:', error);
                 alert('Erro de conexão com o servidor.');
+            } finally {
+                document.getElementById(`status-btn-${id}`).disabled = false; // Reabilita o status btn
             }
         }
 
+        /**
+         * ✅ NOVO: Alterna o status do slot fixo entre confirmed (Disponível) e cancelled (Indisponível).
+         */
         async function toggleStatus(id) {
             const button = document.getElementById(`status-btn-${id}`);
             const currentStatus = button.getAttribute('data-current-status');
+
+            // Define o novo status
             const newStatus = currentStatus === 'confirmed' ? 'cancelled' : 'confirmed';
 
+            const actionText = newStatus === 'confirmed' ? 'disponibilizar' : 'marcar como indisponível';
+
+            if (!confirm(`Confirma a ação de ${actionText} o slot ID #${id} no calendário?`)) {
+                 return;
+            }
+
+            // Desabilita botões durante o processamento
             button.disabled = true;
             button.textContent = 'Aguardando...';
+            document.getElementById(`edit-icon-${id}`).classList.add('opacity-50', 'pointer-events-none');
 
             try {
-                const response = await fetch(`/admin/config/fixed-reserva/${id}/status`, {
+                // ✅ CORREÇÃO APLICADA: Usa UPDATE_STATUS_URL com replace
+                const url = UPDATE_STATUS_URL.replace(':id', id);
+
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -520,6 +555,7 @@
                 if (response.ok && result.success) {
                     button.setAttribute('data-current-status', newStatus);
 
+                    // 🛑 Atualiza o estilo e o texto do botão
                     if (newStatus === 'confirmed') {
                         button.textContent = 'Disponível';
                         button.classList.remove('status-cancelled');
@@ -529,16 +565,19 @@
                         button.classList.remove('status-confirmed');
                         button.classList.add('status-cancelled');
                     }
-                    alert(result.message);
+                    alert(result.message + " O calendário público será atualizado.");
                 } else {
-                    alert('Erro ao atualizar status: ' + (result.error || result.message));
+                    // O erro de conexão geralmente cai aqui
+                    alert('Erro ao atualizar status: ' + (result.error || result.message || 'Erro desconhecido. Verifique o console.'));
                 }
 
             } catch (error) {
                 console.error('Erro de rede ao atualizar status:', error);
-                alert('Erro de conexão com o servidor.');
+                // Exibe o erro de conexão de forma mais clara
+                alert('ERRO DE CONEXÃO COM O SERVIDOR (Network Error): Verifique a URL e o log.');
             } finally {
                 button.disabled = false;
+                document.getElementById(`edit-icon-${id}`).classList.remove('opacity-50', 'pointer-events-none');
             }
         }
     </script>
