@@ -77,9 +77,11 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
 
         // Rotas AJAX para gerenciar slots fixos individuais (usadas na tabela de gerenciamento)
         Route::post('/config/fixed-reserva/{reserva}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('config.update_price');
-
-        // 🛑 CRÍTICO: ROTA DE ALTERAÇÃO DE STATUS (Nome corrigido para admin.config.update_status, conforme esperado pelo JS)
         Route::post('/config/fixed-reserva/{reserva}/status', [ConfigurationController::class, 'toggleFixedReservaStatus'])->name('config.update_status');
+
+        // 🆕 NOVAS ROTAS AJAX DE EXCLUSÃO DE CONFIGURAÇÃO RECORRENTE
+        Route::post('/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('config.delete_slot_config');
+        Route::post('/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('config.delete_day_config'); // ESTA ROTA FOI ADICIONADA/CONFIRMADA
 
 
         // --- ROTAS DE GERENCIAMENTO DE RESERVAS (Mantidas) ---

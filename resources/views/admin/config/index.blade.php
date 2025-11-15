@@ -42,6 +42,23 @@
             margin-bottom: 0.75rem;
             background-color: #fafafa; /* Gray 50 */
         }
+
+        /* Estilo para o modal de confirmação */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-overlay.hidden {
+            display: none !important;
+        }
     </style>
 
     <div class="py-12">
@@ -64,7 +81,7 @@
             @endif
             @if ($errors->any())
                 <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
-                    <p>Houve um erro na validação dos dados. Por favor, verifique os campos e tente novamente.</p>
+                    <p>Houve um erro na validação dos dados. Verifique se os campos foram preenchidos corretamente.</p>
                 </div>
             @endif
 
@@ -96,9 +113,13 @@
                                     $slots = $dayConfigurations[$dayOfWeek] ?? [];
                                     $hasSlots = !empty($slots);
 
-                                    $isDayActive = $hasSlots ? collect($slots)->contains('is_active', true) : false;
+                                    // Lógica para determinar se o dia está ativo (pelo menos um slot marcado como ativo)
+                                    // is_active na base de dados (is_active do model) é o master.
+                                    // A variável $isDayActive é para a UI.
+                                    $configModel = \App\Models\ArenaConfiguration::where('day_of_week', $dayOfWeek)->first();
+                                    $isDayActive = $configModel ? $configModel->is_active : false;
 
-                                    // Corrige o placeholder para ser um array associativo
+                                    // Adiciona um placeholder se não houver slots salvos
                                     if (!$hasSlots)
                                     {
                                         $slots[] = ['start_time' => '06:00:00', 'end_time' => '23:00:00', 'default_price' => 100.00, 'is_active' => false];
@@ -106,15 +127,30 @@
                                 @endphp
 
                                 <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg shadow-inner">
-                                    <div class="flex items-center space-x-4 mb-4 border-b pb-2">
-                                        {{-- Checkbox Mestre de Ativo/Inativo para o dia --}}
-                                        <input type="checkbox" name="day_status[{{ $dayOfWeek }}]"
-                                               id="day-active-{{ $dayOfWeek }}" value="1"
-                                               {{ $isDayActive ? 'checked' : '' }}
-                                               class="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 day-toggle-master">
-                                        <label for="day-active-{{ $dayOfWeek }}" class="text-lg font-bold text-gray-900 dark:text-white">
-                                            {{ $dayName }}
-                                        </label>
+                                    <div class="flex items-center space-x-4 mb-4 border-b pb-2 justify-between">
+
+                                        {{-- Título e Checkbox Mestre --}}
+                                        <div class="flex items-center space-x-4">
+                                            <input type="checkbox" name="day_status[{{ $dayOfWeek }}]"
+                                                   id="day-active-{{ $dayOfWeek }}" value="1"
+                                                   {{ $isDayActive ? 'checked' : '' }}
+                                                   class="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 day-toggle-master">
+                                            <label for="day-active-{{ $dayOfWeek }}" class="text-lg font-bold text-gray-900 dark:text-white">
+                                                {{ $dayName }}
+                                            </label>
+                                        </div>
+
+                                        {{-- 🆕 NOVO: Botão de Exclusão de Dia Inteiro --}}
+                                        @if ($isDayActive)
+                                        <button type="button"
+                                                onclick="deleteDayConfig({{ $dayOfWeek }}, '{{ $dayName }}')"
+                                                class="px-3 py-1 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-150 text-xs flex items-center space-x-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            <span>Excluir Dia Recorrente</span>
+                                        </button>
+                                        @endif
+                                        {{-- FIM NOVO BOTÃO DE EXCLUSÃO DE DIA --}}
+
                                     </div>
 
                                     {{-- Container para as faixas de preço --}}
@@ -124,7 +160,11 @@
                                         @foreach ($slots as $index => $slot)
                                             {{-- Renderiza o Slot Salvo ou o Slot de Placeholder --}}
                                             <div class="slot-item slot-container flex items-center space-x-4 p-3 bg-white dark:bg-gray-600"
-                                                 data-day="{{ $dayOfWeek }}" data-index="{{ $index }}">
+                                                 data-day="{{ $dayOfWeek }}"
+                                                 data-index="{{ $index }}"
+                                                 data-start-time="{{ \Carbon\Carbon::parse($slot['start_time'])->format('H:i:s') }}"
+                                                 data-end-time="{{ \Carbon\Carbon::parse($slot['end_time'])->format('H:i:s') }}">
+
                                                 <input type="hidden" name="configs[{{ $dayOfWeek }}][{{ $index }}][day_of_week]" value="{{ $dayOfWeek }}">
 
                                                 {{-- Checkbox de Slot Ativo --}}
@@ -176,12 +216,18 @@
                                                 </div>
 
                                                 {{-- Botão de Remover Slot --}}
-                                                <div class="w-1/12">
-                                                    <button type="button" class="text-red-600 hover:text-red-900 remove-slot-btn"
-                                                            title="Remover Faixa de Horário"
-                                                            data-day="{{ $dayOfWeek }}" {{ count($slots) === 1 ? 'disabled' : '' }}
+                                                <div class="w-1/12 flex items-center justify-end space-x-2">
+                                                    {{-- Botão para REMOVER A FAIXA ESPECÍFICA (com checagem de conflito) --}}
+                                                    <button type="button"
+                                                            onclick="deleteSlotConfig(this)"
+                                                            class="text-red-600 hover:text-red-900 delete-slot-config-btn"
+                                                            title="Excluir Faixa de Horário Recorrente"
+                                                            data-day="{{ $dayOfWeek }}"
+                                                            data-index="{{ $index }}"
+                                                            data-start-time="{{ \Carbon\Carbon::parse($slot['start_time'])->format('H:i:s') }}"
+                                                            data-end-time="{{ \Carbon\Carbon::parse($slot['end_time'])->format('H:i:s') }}"
                                                             {{ !$isDayActive ? 'disabled' : '' }}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                     </button>
                                                 </div>
                                             </div>
@@ -201,7 +247,7 @@
                             @endforeach
                         </div>
 
-                        {{-- ✅ ÚNICO BOTÃO DE SUBMISSÃO (MUITO MAIS SIMPLES) --}}
+                        {{-- ✅ ÚNICO BOTÃO DE SUBMISSÃO (MUITO MAIS SIMPLIS) --}}
                         <div class="flex justify-start mt-8">
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
                                 Salvar Configuração Semanal
@@ -252,7 +298,7 @@
 
                                              <span class="icon-edit" id="edit-icon-{{ $reserva->id }}"
                                                      data-id="{{ $reserva->id }}"
-                                                     onclick="toggleEdit({{ $reserva->id }}, true)"> {{-- ✅ CORREÇÃO AQUI --}}
+                                                     onclick="toggleEdit({{ $reserva->id }}, true)"> {{-- ✅ CORRIGIDO AQUI --}}
                                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                              </span>
 
@@ -287,13 +333,61 @@
         </div>
     </div>
 
+
+    {{-- 🆕 NOVO MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (Com checagem de cliente) --}}
+    <div id="delete-config-modal" class="modal-overlay hidden" onclick="closeDeleteConfigModal()">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold text-red-700 mb-4 border-b pb-2">Confirmação de Exclusão Recorrente</h3>
+
+            <p id="delete-config-message" class="text-gray-700 mb-4 font-medium"></p>
+
+            {{-- ✅ NOVO CAMPO: Justificativa (Obrigatório) --}}
+            <div id="justification-section" class="mb-6">
+                <label for="config-justification-input" class="block text-sm font-medium text-gray-700 mb-2">
+                    Justificativa da Ação (Obrigatória):
+                </label>
+                <textarea id="config-justification-input" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Motivo pelo qual a faixa/dia será excluído (mínimo 5 caracteres)..."></textarea>
+                <p id="justification-error" class="text-xs text-red-500 mt-1 hidden">Por favor, insira uma justificativa válida (mínimo 5 caracteres).</p>
+            </div>
+            {{-- FIM NOVO CAMPO --}}
+
+            {{-- Alerta de Conflito de Clientes (MANTIDO) --}}
+            <p id="delete-config-conflict-warning" class="text-base text-red-600 font-semibold mb-6 p-3 bg-red-100 border border-red-300 rounded hidden">
+                ⚠️ <span id="conflict-count">0</span> reserva(s) de cliente futuras serão CANCELADAS e DELETADAS.
+            </p>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeDeleteConfigModal()" type="button" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
+                    Cancelar
+                </button>
+                <button id="confirm-delete-config-btn" type="button" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
+                    Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // TOKEN CSRF NECESSÁRIO PARA REQUISIÇÕES AJAX
         const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : document.querySelector('input[name="_token"]').value;
 
-        // ✅ INJEÇÃO DA ROTA CORRIGIDA (com placeholder)
+        // ✅ INJEÇÃO DAS NOVAS ROTAS
         const UPDATE_STATUS_URL = '{{ route("admin.config.update_status", ":id") }}';
         const UPDATE_PRICE_URL = '{{ route("admin.config.update_price", ":id") }}';
+        const DELETE_SLOT_CONFIG_URL = '{{ route("admin.config.delete_slot_config") }}';
+        const DELETE_DAY_CONFIG_URL = '{{ route("admin.config.delete_day_config") }}';
+        // ===================================
+
+        // Variáveis de estado para o modal de exclusão
+        let pendingDeleteAction = {
+            type: null, // 'slot' ou 'day'
+            dayOfWeek: null,
+            slotIndex: null,
+            startTime: null,
+            endTime: null,
+            isConfirmed: false,
+            justification: null, // ✅ NOVO CAMPO
+        };
 
         // Contadores para garantir índices únicos ao adicionar novos slots
         const nextIndex = {};
@@ -309,28 +403,25 @@
 
         function updateRemoveButtonState(dayOfWeek) {
             const container = document.getElementById(`slots-container-${dayOfWeek}`);
-            const removeButtons = container.querySelectorAll('.remove-slot-btn');
             const numSlots = container.querySelectorAll('.slot-item').length;
-
-            // Desabilita o botão de remover se houver apenas 1 slot
-            removeButtons.forEach(btn => {
-                btn.disabled = numSlots <= 1;
-            });
         }
 
         function updateSlotInputsState(dayOfWeek, isDisabled) {
             const container = document.getElementById(`slots-container-${dayOfWeek}`);
             const inputs = container.querySelectorAll('input[type="time"], input[type="number"], .slot-active-checkbox');
             const addBtn = document.querySelector(`.add-slot-btn[data-day="${dayOfWeek}"]`);
+            const deleteBtns = container.querySelectorAll('.delete-slot-config-btn');
+
 
             inputs.forEach(input => {
                 input.disabled = isDisabled;
             });
 
             // Desabilita/habilita botões de remover/adicionar
-            container.querySelectorAll('.remove-slot-btn').forEach(btn => {
-                btn.disabled = isDisabled || (container.querySelectorAll('.slot-item').length <= 1);
+            deleteBtns.forEach(btn => {
+                 btn.disabled = isDisabled;
             });
+
             if (addBtn) addBtn.disabled = isDisabled;
         }
 
@@ -347,10 +438,16 @@
                     container.style.display = 'block';
                     // Garante que o checkbox do primeiro slot fica ativo quando o mestre é ativado
                     const firstSlotCheckbox = container.querySelector('.slot-active-checkbox');
-                    if (firstSlotCheckbox) firstSlotCheckbox.checked = true;
+                    // Verifica se existe o primeiro slot antes de tentar acessá-lo
+                    if (firstSlotCheckbox) {
+                        firstSlotCheckbox.checked = true;
+                    } else {
+                        // Se não houver slots (situação rara na UI, mas pode ocorrer), adiciona um novo placeholder
+                         document.querySelector(`.add-slot-btn[data-day="${day}"]`).click();
+                    }
                 } else {
                     container.style.display = 'none';
-                    // Desativa todos os slots (embora o Controller só considere os que têm o master ativado)
+                    // Desativa todos os slots
                     container.querySelectorAll('.slot-active-checkbox').forEach(cb => cb.checked = false);
                 }
 
@@ -368,7 +465,11 @@
 
                 // Cópia do HTML de um slot de placeholder
                 const newSlotHtml = `
-                    <div class="slot-item slot-container flex items-center space-x-4 p-3 bg-white dark:bg-gray-600" data-day="${dayOfWeek}" data-index="${index}">
+                    <div class="slot-item slot-container flex items-center space-x-4 p-3 bg-white dark:bg-gray-600"
+                         data-day="${dayOfWeek}"
+                         data-index="${index}"
+                         data-start-time="08:00:00"
+                         data-end-time="12:00:00">
                         <input type="hidden" name="configs[${dayOfWeek}][${index}][day_of_week]" value="${dayOfWeek}">
 
                         <div class="flex items-center">
@@ -398,9 +499,16 @@
                                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white price-input-config">
                         </div>
 
-                        <div class="w-1/12">
-                            <button type="button" class="text-red-600 hover:text-red-900 remove-slot-btn" title="Remover Faixa de Horário" data-day="${dayOfWeek}">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <div class="w-1/12 flex items-center justify-end space-x-2">
+                            <button type="button"
+                                    onclick="deleteSlotConfig(this)"
+                                    class="text-red-600 hover:text-red-900 delete-slot-config-btn"
+                                    title="Excluir Faixa de Horário Recorrente"
+                                    data-day="${dayOfWeek}"
+                                    data-index="${index}"
+                                    data-start-time="08:00:00"
+                                    data-end-time="12:00:00">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </button>
                         </div>
                     </div>
@@ -409,43 +517,224 @@
                 container.insertAdjacentHTML('beforeend', newSlotHtml);
                 nextIndex[dayOfWeek]++;
 
-                // Reatribui listener de remoção
-                attachRemoveListeners();
                 updateRemoveButtonState(dayOfWeek);
             });
         });
 
-        // 3. Remover Slot (Função auxiliar para reatribuir)
-        function attachRemoveListeners() {
-            document.querySelectorAll('.remove-slot-btn').forEach(button => {
-                // Remove o listener anterior para evitar duplicidade
-                button.removeEventListener('click', handleRemoveClick);
-                // Adiciona o novo listener
-                button.addEventListener('click', handleRemoveClick);
-            });
-        }
-
-        function handleRemoveClick() {
-            const slotItem = this.closest('.slot-item');
-            const dayOfWeek = this.dataset.day;
-            if (slotItem) {
-                slotItem.remove();
-                updateRemoveButtonState(dayOfWeek);
-            }
-        }
-
-        // Inicializa listeners de remoção no carregamento
-        attachRemoveListeners();
-
         // Inicializa o estado dos inputs e botões (no carregamento da página)
         document.addEventListener('DOMContentLoaded', function() {
-            // Garante que o estado inicial dos botões de remoção está correto
             @foreach (\App\Models\ArenaConfiguration::DAY_NAMES as $dayOfWeek => $dayName)
                 updateRemoveButtonState({{ $dayOfWeek }});
             @endforeach
         });
 
-        // --- Lógica de Edição de Preço e Status (Tabela de Reservas Fixas) ---
+        // --- LÓGICA DO MODAL DE CONFIRMAÇÃO DE EXCLUSÃO ---
+
+        /**
+         * Abre o modal de exclusão e configura a mensagem e alerta de conflito.
+         */
+        function openDeleteConfigModal(message, conflictCount) {
+             document.getElementById('delete-config-message').innerHTML = message;
+
+             // Reinicializa o campo de justificativa
+             document.getElementById('config-justification-input').value = '';
+             document.getElementById('justification-error').classList.add('hidden');
+
+             const conflictWarning = document.getElementById('delete-config-conflict-warning');
+             const conflictCountSpan = document.getElementById('conflict-count');
+
+             if (conflictCount > 0) {
+                 conflictCountSpan.textContent = conflictCount;
+                 conflictWarning.classList.remove('hidden');
+             } else {
+                 conflictWarning.classList.add('hidden');
+             }
+
+             document.getElementById('delete-config-modal').classList.remove('hidden');
+             document.getElementById('delete-config-modal').classList.add('flex');
+             document.getElementById('confirm-delete-config-btn').textContent = 'Continuar'; // Botão padrão
+        }
+
+        /**
+         * Fecha o modal de exclusão e reseta o estado de confirmação.
+         */
+        function closeDeleteConfigModal() {
+             document.getElementById('delete-config-modal').classList.remove('flex');
+             document.getElementById('delete-config-modal').classList.add('hidden');
+             pendingDeleteAction.isConfirmed = false; // Reseta a confirmação
+             pendingDeleteAction.justification = null; // ✅ NOVO: Reseta a justificativa
+        }
+
+        /**
+         * Função para realizar a chamada AJAX de exclusão (slot ou dia).
+         */
+        async function executeDeleteAction(isConfirmed) {
+            const { type, dayOfWeek, slotIndex, startTime, endTime, justification } = pendingDeleteAction;
+            let url = '';
+            let payload = {
+                day_of_week: dayOfWeek,
+                confirm_cancel: isConfirmed ? 1 : 0, // Flag para forçar o cancelamento de clientes
+                justificativa_gestor: justification, // ✅ ENVIA JUSTIFICATIVA
+                _token: csrfToken
+            };
+
+            if (type === 'slot') {
+                url = DELETE_SLOT_CONFIG_URL;
+                payload.slot_index = slotIndex;
+                payload.start_time = startTime;
+                payload.end_time = endTime;
+            } else if (type === 'day') {
+                url = DELETE_DAY_CONFIG_URL;
+            } else {
+                alert('Erro: Ação de exclusão desconhecida.');
+                return;
+            }
+
+            const confirmBtn = document.getElementById('confirm-delete-config-btn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Processando...';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    closeDeleteConfigModal();
+                    // Recarrega a página para refletir as mudanças no formulário
+                    window.location.reload();
+
+                } else if (response.status === 409 && result.requires_confirmation) {
+                    // Ocorre o primeiro conflito: Reabre o modal pedindo confirmação de cliente
+                    pendingDeleteAction.isConfirmed = true; // Marca que o gestor já inseriu a justificativa
+
+                    const message = result.message + " **Esta ação é irreversível e usará a justificativa que você inseriu.**";
+
+                    openDeleteConfigModal(message, result.count);
+                    document.getElementById('confirm-delete-config-btn').textContent = 'Confirmar Exclusão'; // Altera o texto do botão
+
+                } else if (response.status === 422 && result.errors) {
+                    // Erro de validação (ex: Justificativa muito curta ou não enviada)
+                    const errorMsg = result.errors.justificativa_gestor ? result.errors.justificativa_gestor.join(', ') : 'Erro de validação desconhecido. Verifique se o campo de justificativa está preenchido.';
+
+                    // Exibe o erro de validação no campo (se for o caso)
+                    if (result.errors.justificativa_gestor) {
+                        document.getElementById('justification-error').textContent = result.errors.justificativa_gestor.join(', ');
+                        document.getElementById('justification-error').classList.remove('hidden');
+                        document.getElementById('config-justification-input').focus();
+                    } else {
+                        alert('Erro de Validação: ' + errorMsg);
+                    }
+
+                    // Se o erro foi na validação, mantém o modal aberto, mas reativa o botão
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Continuar';
+
+                } else {
+                    // Erro 404, 500, ou falha de validação do Controller
+                    alert('Erro ao excluir: ' + (result.error || result.message || 'Erro de servidor ou validação.'));
+                    closeDeleteConfigModal();
+                }
+            } catch (error) {
+                console.error('Erro de rede ao excluir:', error);
+                alert('Erro de conexão com o servidor. Verifique o log do Laravel para detalhes.');
+                closeDeleteConfigModal();
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Continuar';
+            }
+        }
+
+        // Listener do botão de Confirmação Final do Modal
+        document.getElementById('confirm-delete-config-btn').addEventListener('click', function() {
+            // Se já for a 2ª rodada (confirmação de cliente), prossegue imediatamente.
+            if (pendingDeleteAction.isConfirmed) {
+                executeDeleteAction(true);
+                return;
+            }
+
+            // Caso contrário, coleta a justificativa e chama a função de checagem.
+            const justificationInput = document.getElementById('config-justification-input');
+            const justificationError = document.getElementById('justification-error');
+            const justification = justificationInput.value.trim();
+
+            if (justification.length < 5) {
+                justificationError.textContent = 'Por favor, insira uma justificativa válida (mínimo 5 caracteres).';
+                justificationError.classList.remove('hidden');
+                justificationInput.focus();
+                return;
+            }
+            justificationError.classList.add('hidden');
+
+            // Armazena a justificativa no estado temporário
+            pendingDeleteAction.justification = justification;
+
+            // Dispara a checagem de conflito (com a justificativa pronta)
+            executeDeleteAction(false);
+        });
+
+        // 3.1. Função para Excluir Slot Específico (Chamada pelo Botão 'X')
+        function deleteSlotConfig(buttonElement) {
+            const slotItem = buttonElement.closest('.slot-item');
+            if (!slotItem) return;
+
+            const dayOfWeek = parseInt(slotItem.dataset.day);
+            const slotIndex = parseInt(slotItem.dataset.index);
+            // CRÍTICO: Pega os horários do dataset do slot (já estão no formato H:i:s)
+            const startTime = slotItem.dataset.startTime;
+            const endTime = slotItem.dataset.endTime;
+
+            const dayName = @json(\App\Models\ArenaConfiguration::DAY_NAMES)[dayOfWeek];
+
+            // 1. Configura a ação pendente
+            pendingDeleteAction = {
+                type: 'slot',
+                dayOfWeek: dayOfWeek,
+                slotIndex: slotIndex,
+                startTime: startTime,
+                endTime: endTime,
+                isConfirmed: false,
+                justification: null,
+            };
+
+            // 2. Mensagem Inicial
+            const initialMessage = `Tem certeza que deseja remover a faixa de horário recorrente **${startTime.substring(0, 5)} - ${endTime.substring(0, 5)}** do dia ${dayName}?`;
+
+            // 3. Abre o modal e espera a justificativa.
+            openDeleteConfigModal(initialMessage, 0);
+        }
+
+        // 3.2. Função para Excluir Dia Inteiro (Chamada pelo Botão 'Excluir Dia Recorrente')
+        function deleteDayConfig(dayOfWeek, dayName) {
+
+            // 1. Configura a ação pendente
+            pendingDeleteAction = {
+                type: 'day',
+                dayOfWeek: dayOfWeek,
+                slotIndex: null,
+                startTime: null,
+                endTime: null,
+                isConfirmed: false,
+                justification: null,
+            };
+
+            // 2. Mensagem Inicial
+            const initialMessage = `Tem certeza que deseja **desativar e remover** TODAS as faixas de horário do dia **${dayName}**?`;
+
+            // 3. Abre o modal e espera a justificativa.
+            openDeleteConfigModal(initialMessage, 0);
+        }
+
+        // --- Restante da Lógica (Update Price/Status) ---
 
         function toggleEdit(id, isEditing) {
             const display = document.getElementById(`price-display-${id}`);
@@ -454,7 +743,6 @@
             const saveIcon = document.getElementById(`save-icon-${id}`);
             const statusBtn = document.getElementById(`status-btn-${id}`);
 
-            // Desabilita o botão de status durante a edição de preço
             if (statusBtn) statusBtn.disabled = isEditing;
 
             if (isEditing) {
@@ -476,7 +764,7 @@
             const newPrice = parseFloat(input.value);
 
             if (!confirm(`Confirma a alteração do preço para R$ ${newPrice.toFixed(2).replace('.', ',')}?`)) {
-                 toggleEdit(id, false); // Cancela a edição se o usuário negar
+                 toggleEdit(id, false);
                  return;
             }
 
@@ -485,11 +773,10 @@
                 return;
             }
 
-            toggleEdit(id, false); // Esconde botões de edição/salvar
-            document.getElementById(`status-btn-${id}`).disabled = true; // Desabilita o status btn
+            toggleEdit(id, false);
+            document.getElementById(`status-btn-${id}`).disabled = true;
 
             try {
-                // ✅ CORREÇÃO APLICADA: Usa UPDATE_PRICE_URL com replace
                 const url = UPDATE_PRICE_URL.replace(':id', id);
                 const response = await fetch(url, {
                     method: 'POST',
@@ -512,18 +799,14 @@
                 console.error('Erro de rede ao atualizar preço:', error);
                 alert('Erro de conexão com o servidor.');
             } finally {
-                document.getElementById(`status-btn-${id}`).disabled = false; // Reabilita o status btn
+                document.getElementById(`status-btn-${id}`).disabled = false;
             }
         }
 
-        /**
-         * ✅ NOVO: Alterna o status do slot fixo entre confirmed (Disponível) e cancelled (Indisponível).
-         */
         async function toggleStatus(id) {
             const button = document.getElementById(`status-btn-${id}`);
             const currentStatus = button.getAttribute('data-current-status');
 
-            // Define o novo status
             const newStatus = currentStatus === 'confirmed' ? 'cancelled' : 'confirmed';
 
             const actionText = newStatus === 'confirmed' ? 'disponibilizar' : 'marcar como indisponível';
@@ -532,13 +815,11 @@
                  return;
             }
 
-            // Desabilita botões durante o processamento
             button.disabled = true;
             button.textContent = 'Aguardando...';
             document.getElementById(`edit-icon-${id}`).classList.add('opacity-50', 'pointer-events-none');
 
             try {
-                // ✅ CORREÇÃO APLICADA: Usa UPDATE_STATUS_URL com replace
                 const url = UPDATE_STATUS_URL.replace(':id', id);
 
                 const response = await fetch(url, {
@@ -555,7 +836,6 @@
                 if (response.ok && result.success) {
                     button.setAttribute('data-current-status', newStatus);
 
-                    // 🛑 Atualiza o estilo e o texto do botão
                     if (newStatus === 'confirmed') {
                         button.textContent = 'Disponível';
                         button.classList.remove('status-cancelled');
@@ -567,13 +847,11 @@
                     }
                     alert(result.message + " O calendário público será atualizado.");
                 } else {
-                    // O erro de conexão geralmente cai aqui
                     alert('Erro ao atualizar status: ' + (result.error || result.message || 'Erro desconhecido. Verifique o console.'));
                 }
 
             } catch (error) {
                 console.error('Erro de rede ao atualizar status:', error);
-                // Exibe o erro de conexão de forma mais clara
                 alert('ERRO DE CONEXÃO COM O SERVIDOR (Network Error): Verifique a URL e o log.');
             } finally {
                 button.disabled = false;
