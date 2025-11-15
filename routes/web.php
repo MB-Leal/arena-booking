@@ -99,16 +99,21 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         Route::patch('reservas/{reserva}/status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
-        Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
+
+        // 1. Cancelamento Pontual (UPDATE DE STATUS)
+        // ✅ MUDADO PARA POST para aceitar o body com o motivo de cancelamento.
+        Route::post('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 
         // ❌ Rota DELETE Antiga (Destrói Reserva Pontual)
         Route::delete('reservas/{reserva}', [AdminController::class, 'destroyReserva'])->name('reservas.destroy');
 
-        // ✅ NOVAS ROTAS DE CANCELAMENTO RECORRENTE
-        // 1. Cancelamento Pontual de uma Reserva Recorrente (Recria o Slot Fixo)
-        Route::delete('reservas/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('reservas.cancelar_pontual');
-        // 2. Cancelamento da Série Inteira (Recria todos os Slots Fixos futuros)
-        Route::delete('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
+        // 2. Cancelamento Pontual de uma Reserva Recorrente (DELETE & RECRIAR SLOT)
+        // ✅ MUDADO PARA POST para aceitar o body com o motivo de cancelamento.
+        Route::post('reservas/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('reservas.cancelar_pontual');
+
+        // 3. Cancelamento da Série Inteira (DELETE SÉRIE & RECRIAR SLOTS)
+        // ✅ MUDADO PARA POST para aceitar o body com o motivo de cancelamento.
+        Route::post('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
 
 
         // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS ---

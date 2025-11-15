@@ -130,9 +130,12 @@ class ReservaController extends Controller
             ->first();
 
         if (!$slotFixo || $this->checkOverlap($date, $startTime, $endTime, false, $reservaIdToUpdate)) {
+
+            $conflictingIds = $this->getConflictingReservaIds($date, $startTime, $endTime, $reservaIdToUpdate);
+
              return response()->json([
                  'success' => false,
-                 'message' => 'Conflito! O horário inicial não está mais disponível ou se sobrepõe a outra reserva. Recarregue a página.',
+                 'message' => 'Conflito! O horário inicial não está mais disponível ou se sobrepõe a outra reserva. (IDs Conflitantes: ' . $conflictingIds . ') Recarregue a página.',
              ], 409);
         }
 
@@ -259,9 +262,14 @@ class ReservaController extends Controller
             ->first();
 
         if (!$slotFixo || $this->checkOverlap($date, $startTime, $endTime, false, $reservaIdToUpdate)) {
+
+            // 🛑 NOVO: Captura os IDs em conflito
+            $conflictingIds = $this->getConflictingReservaIds($date, $startTime, $endTime, $reservaIdToUpdate);
+
              return response()->json([
                  'success' => false,
-                 'message' => 'Conflito! O horário não está mais disponível ou se sobrepõe a outra reserva. Recarregue a página.',
+                 // 🛑 NOVO: Adiciona o feedback com IDs em conflito
+                 'message' => 'Conflito! O horário não está mais disponível ou se sobrepõe a outra reserva. (IDs Conflitantes: ' . $conflictingIds . ') Recarregue a página.',
              ], 409);
         }
 

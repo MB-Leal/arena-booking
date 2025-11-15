@@ -24,6 +24,12 @@
                         <p class="font-medium">{{ session('warning') }}</p>
                     </div>
                 @endif
+                @if ($errors->any())
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
+                        <p>Houve um erro na validação dos dados: Verifique se o motivo de cancelamento é válido.</p>
+                    </div>
+                @endif
+
 
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
 
@@ -43,9 +49,8 @@
                             </a>
                         </div>
 
-                        {{-- ✅ NOVO: Formulário de Pesquisa --}}
+                        {{-- Formulário de Pesquisa --}}
                         <form method="GET" action="{{ route('admin.reservas.confirmed_index') }}" class="flex items-center space-x-2 w-full md:w-auto">
-                            {{-- Mantém o filtro 'only_mine' se estiver ativo --}}
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
                             <input type="text"
@@ -69,6 +74,12 @@
                             @endif
                         </form>
                     </div>
+
+                    <a href="{{ route('admin.reservas.create') }}"
+                       class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-xl shadow-green-400/50 transition duration-150 ease-in-out flex items-center justify-center space-x-1 tracking-wider">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                        <span class="text-sm">Nova Manual</span>
+                    </a>
                 </div>
 
                 <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-lg">
@@ -131,23 +142,25 @@
                                         <div class="flex flex-col space-y-1">
 
                                             <a href="{{ route('admin.reservas.show', $reserva) }}"
-                                               class="inline-block text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                               class="inline-block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                 Detalhes
                                             </a>
 
                                             @if ($reserva->is_recurrent)
-                                                {{-- ✅ AÇÕES PARA RESERVAS RECORRENTES (DELETE) --}}
-                                                <button onclick="cancelarPontualAjax({{ $reserva->id }})"
+                                                {{-- ✅ AÇÕES PARA RESERVAS RECORRENTES (DELETE INTERNO) --}}
+                                                {{-- CANCELAR PONTUAL DA SÉRIE --}}
+                                                <button onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar SOMENTE ESTA reserva recorrente. O slot será liberado pontualmente.', 'Cancelar ESTE DIA')"
                                                    class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                     Cancelar ESTE DIA
                                                 </button>
-                                                <button onclick="cancelarSerieAjax({{ $reserva->id }})"
+                                                {{-- CANCELAR SÉRIE INTEIRA --}}
+                                                <button onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_serie', ':id') }}', 'Tem certeza que deseja cancelar TODA A SÉRIE (futura) para este cliente? Todos os horários serão liberados.', 'Cancelar SÉRIE')"
                                                     class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                     Cancelar SÉRIE
                                                 </button>
                                             @else
-                                                {{-- ✅ AÇÃO PADRÃO PARA RESERVAS PONTUAIS (PATCH) --}}
-                                                <button onclick="cancelarReservaPontualAjax({{ $reserva->id }})"
+                                                {{-- ✅ AÇÃO PADRÃO PARA RESERVAS PONTUAIS (PATCH INTERNO) --}}
+                                                <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Tem certeza que deseja CANCELAR esta reserva PONTUAL? Isso a marcará como cancelada no sistema.', 'Cancelar')"
                                                    class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                     Cancelar
                                                 </button>
@@ -178,84 +191,166 @@
         </div>
     </div>
 
+    {{-- MODAL DE CANCELAMENTO (Escondido por padrão) --}}
+    <div id="cancellation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content">
+            <h3 id="modal-title" class="text-xl font-bold text-red-700 mb-4 border-b pb-2">Confirmação de Cancelamento</h3>
+
+            <p id="modal-message" class="text-gray-700 mb-4"></p>
+
+            <div class="mb-6">
+                <label for="cancellation-reason-input" class="block text-sm font-medium text-gray-700 mb-2">
+                    Motivo do Cancelamento:
+                </label>
+                <textarea id="cancellation-reason-input" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Obrigatório, descreva o motivo do cancelamento (mínimo 5 caracteres)..."></textarea>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeCancellationModal()" type="button" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
+                    Fechar
+                </button>
+                <button id="confirm-cancellation-btn" type="button" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
+                    Confirmar Cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     {{-- SCRIPTS DE AÇÃO AJAX --}}
     <script>
         // Variáveis de Rota e Token
-        const CSRF_TOKEN = document.querySelector('input[name="_token"]').value;
-        const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}'; // DELETE (Recorrente: exceção)
-        const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}'; // DELETE (Recorrente: série inteira)
-        const CANCEL_PADRAO_URL = '{{ route("admin.reservas.cancelar", ":id") }}'; // PATCH (Pontual: status para cancelled)
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        // Usamos as mesmas rotas do Dashboard. Elas esperam POST e ignoram o _method no body.
+        const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
+        const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
+        const CANCEL_PADRAO_URL = '{{ route("admin.reservas.cancelar", ":id") }}';
 
+        let currentReservaId = null;
+        let currentMethod = null; // PATCH ou DELETE (Método Lógico)
+        let currentUrlBase = null;
 
         /**
-         * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES (DELETE/PATCH)
+         * Abre o modal de cancelamento e configura os dados da reserva.
          */
-        async function sendAjaxRequest(url, method, confirmationMessage) {
-            if (!confirm(confirmationMessage)) {
-                return;
-            }
+        function openCancellationModal(reservaId, method, urlBase, message, buttonText) {
+            currentReservaId = reservaId;
+            currentMethod = method;
+            currentUrlBase = urlBase;
+            document.getElementById('cancellation-reason-input').value = ''; // Limpa o campo
+
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('cancellation-modal').classList.remove('hidden');
+            document.getElementById('cancellation-modal').classList.add('flex');
+
+            // Ativa a transição do modal
+            setTimeout(() => {
+                document.getElementById('cancellation-modal-content').classList.remove('opacity-0', 'scale-95');
+            }, 10);
+
+            document.getElementById('confirm-cancellation-btn').textContent = buttonText;
+        }
+
+        /**
+         * Fecha o modal.
+         */
+        function closeCancellationModal() {
+            document.getElementById('cancellation-modal-content').classList.add('opacity-0', 'scale-95');
+            setTimeout(() => {
+                document.getElementById('cancellation-modal').classList.remove('flex');
+                document.getElementById('cancellation-modal').classList.add('hidden');
+            }, 300);
+        }
+
+        /**
+         * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES
+         * 🛑 CRÍTICO: Não passa o _method no body, pois as rotas esperam POST.
+         */
+        async function sendAjaxRequest(reservaId, method, urlBase, reason) {
+            const url = urlBase.replace(':id', reservaId);
+
+            // Monta o body da requisição
+            const bodyData = {
+                cancellation_reason: reason,
+                _token: CSRF_TOKEN,
+                // O método LÓGICO não é mais enviado via _method para evitar o 405.
+                // O Controller deve ser capaz de deduzir a ação pela rota específica.
+            };
+
+            // Log de debug para rastrear a URL
+            console.log(`[DEBUG - Confirmed Index] Tentando enviar AJAX (POST) para: ${url}`);
+
+            const fetchConfig = {
+                method: 'POST', // Transporte HTTP
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(bodyData)
+            };
+
+            const submitBtn = document.getElementById('confirm-cancellation-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processando...';
 
             try {
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'X-CSRF-TOKEN': CSRF_TOKEN,
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                    }
-                });
+                const response = await fetch(url, fetchConfig);
 
+                // Trata a resposta JSON, incluindo erros de validação Laravel 422
                 let result = {};
                 try {
-                    // Tenta ler o JSON
                     result = await response.json();
                 } catch (e) {
-                    console.error("Falha ao ler JSON de resposta (Pode ser 500 ou HTML).", e);
+                    const errorText = await response.text();
+                    console.error("Falha ao ler JSON de resposta (Pode ser 500 ou HTML).", errorText);
+                    result = { error: `Erro do Servidor (${response.status}). Verifique o console.` };
                 }
 
                 if (response.ok) {
                     alert(result.message || "Ação realizada com sucesso. A lista será atualizada.");
+                    closeCancellationModal();
 
-                    // Recarrega a página atual da tabela (após o alert fechar)
+                    // Recarrega a página após uma breve pausa para o usuário ver o alert
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
+                } else if (response.status === 422 && result.errors) {
+                     // Lidar com erro de validação (Motivo muito curto)
+                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
+                     alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                 } else {
-                    // Trata erros de validação/conflito/servidor
-                    alert(result.error || result.message || "Erro desconhecido ao processar a ação.");
+                    alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
                 }
 
             } catch (error) {
                 console.error('Erro de Rede/Comunicação:', error);
                 alert("Erro de conexão. Tente novamente.");
+            } finally {
+                 document.getElementById('confirm-cancellation-btn').disabled = false;
+                 submitBtn.textContent = 'Confirmar Cancelamento';
             }
         }
 
-        // --- FUNÇÕES DE CANCELAMENTO RECORRENTE (DELETE) ---
+        // --- Listener de Confirmação do Modal ---
+        document.getElementById('confirm-cancellation-btn').addEventListener('click', function() {
+            const reason = document.getElementById('cancellation-reason-input').value.trim();
 
-        function cancelarPontualAjax(reservaId) {
-            const url = CANCEL_PONTUAL_URL.replace(':id', reservaId);
-            const confirmation = "Tem certeza que deseja cancelar SOMENTE ESTA reserva recorrente? O slot será liberado pontualmente.";
-            sendAjaxRequest(url, 'DELETE', confirmation);
-        }
+            // Validação mínima no Front-end (o back-end fará a validação final)
+            if (reason.length < 5) {
+                alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
+                return;
+            }
 
-        function cancelarSerieAjax(reservaId) {
-            const url = CANCEL_SERIE_URL.replace(':id', reservaId);
-            const confirmation = "⚠️ ATENÇÃO: Tem certeza que deseja cancelar TODA A SÉRIE (futura) para este cliente? Todos os horários serão liberados.";
-            sendAjaxRequest(url, 'DELETE', confirmation);
-        }
-
-        // --- FUNÇÃO DE CANCELAMENTO PONTUAL PADRÃO (PATCH) ---
-
-        function cancelarReservaPontualAjax(reservaId) {
-            // Rota PATCH /admin/reservas/{reserva}/cancelar que muda o status para 'cancelled'
-            const url = CANCEL_PADRAO_URL.replace(':id', reservaId);
-            const confirmation = "Tem certeza que deseja CANCELAR esta reserva PONTUAL? Isso a marcará como cancelada no sistema.";
-
-            // Como o Controller já sabe que deve mudar o status para 'cancelled' na rota, usamos PATCH.
-            sendAjaxRequest(url, 'PATCH', confirmation);
-        }
+            if (currentReservaId && currentMethod && currentUrlBase) {
+                // Passamos o método LÓGICO (PATCH/DELETE) para debug, mas ele não vai no bodyData.
+                sendAjaxRequest(currentReservaId, currentMethod, currentUrlBase, reason);
+            } else {
+                alert("Erro: Dados da reserva não configurados corretamente.");
+            }
+        });
 
     </script>
 </x-app-layout>

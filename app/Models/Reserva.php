@@ -23,11 +23,9 @@ class Reserva extends Model
 
     /**
      * Os atributos que são mass assignable.
-     * Incluindo os campos de recorrência CRÍTICOS.
      */
     protected $fillable = [
         'user_id',
-        // REMOVIDO: 'schedule_id' (Antigo sistema)
         'date',
         'start_time',
         'end_time',
@@ -38,14 +36,14 @@ class Reserva extends Model
         'status',
         'manager_id', // ID do gestor que criou/confirmou
 
+        'cancellation_reason', // ✅ ADICIONADO: Motivo do cancelamento
+
         // --- Campos para Recorrência ---
         'is_fixed',         // Grade de slots fixos gerada pelo ConfigController
         'day_of_week',      // Dia da semana para filtros (0=Dom, 1=Seg, ...)
 
-        // ✅ CRÍTICO: ADICIONADO para que o UPDATE funcione no agendamento recorrente
         'is_recurrent',     // Flag para saber se é parte de uma série de cliente fixo
         'recurrent_series_id', // ID do primeiro slot da série (mestre)
-        // REMOVIDO: 'week_index' (Campo não essencial para a lógica atual)
     ];
 
     /**
@@ -54,7 +52,7 @@ class Reserva extends Model
     protected $casts = [
         'date' => 'date',
         'is_fixed' => 'boolean',
-        'is_recurrent' => 'boolean', // ✅ ADICIONADO: Garante que 0/1 seja interpretado como boolean
+        'is_recurrent' => 'boolean',
     ];
 
     // ------------------------------------------------------------------------
@@ -63,13 +61,6 @@ class Reserva extends Model
 
     /**
      * Scope local para retornar todas as reservas que ESTÃO OCUPANDO um horário.
-     * CRÍTICO: Este scope exclui as reservas que foram canceladas, rejeitadas ou expiradas.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @param string $checkDate Data que você deseja verificar (Ex: '2025-11-20')
-     * @param string $checkStartTime Hora de início do slot (Ex: '10:00:00')
-     * @param string $checkEndTime Hora de fim do slot (Ex: '11:00:00')
-     * @return \Illuminate\Database\Eloquent\Builder
      */
     public function scopeIsOccupied($query, string $checkDate, string $checkStartTime, string $checkEndTime)
     {
@@ -104,9 +95,6 @@ class Reserva extends Model
         return $this->belongsTo(User::class, 'manager_id');
     }
 
-    // REMOVIDO: O relacionamento 'schedule()' não é mais necessário,
-    // pois o sistema de Schedules foi substituído pelo ArenaConfiguration.
-
     // ------------------------------------------------------------------------
     // ACESSORES MODERNOS
     // ------------------------------------------------------------------------
@@ -134,7 +122,6 @@ class Reserva extends Model
     protected function criadoPorLabel(): Attribute
     {
         return Attribute::make(
-            // Se manager_id estiver preenchido, retorna o nome do gestor associado.
             get: fn () => $this->manager?->name ?? 'Cliente via Web',
         );
     }
